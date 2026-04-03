@@ -34,7 +34,7 @@ unsigned short RelayTm[12u];
 unsigned short ThermostatTm[12u];
 unsigned short ActThermostatTm[12u];
 unsigned short thermocouple_zero_cnt[12u];
-float OutputPwmMaxUnit[TpMaxLp]={32767.0F};	// Fu 108/01/03 : ¥Ñ³æ¬qÅÜ§ó¬°¦h¬q
+float OutputPwmMaxUnit[TpMaxLp]={32767.0F};	// Fu 108/01/03 : ï¿½Ñ³ï¿½qï¿½Ü§ó¬°¦hï¿½q
 unsigned short TemperatureSensor[12] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11};
 unsigned short TemperatureOutput[12] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11};
 void BkTpCurrDisplaySecSub(void);
@@ -151,6 +151,12 @@ int main(void)
 	// Fu 107/07/13
 	APVer[2] = *(unsigned char *)0x2001FFF8u;
 	APVer[3] = *(unsigned char *)0x2001FFF9u;
+	//
+	// Fix: During init, TIM5 ISR may process HMI queries and set PA12 HIGH (TX mode).
+	// Since RS485TxSub() only runs in the main loop, PA12 never returns to LOW.
+	// Force PA12 LOW (receive mode) before entering main loop.
+	USART1_RTS_L;
+	SendRs485Fg = 0;
 	//
 	while (1u)
 	{
@@ -320,7 +326,7 @@ void EEPROMCmp(void)
 	{
 		if(*GetPtrCDM2(20001+i) != *GetPtrCDM3(30001+i))
 		{
-			BkTpCurrDisplaySecSub(); // 2014/10/16 IOÂà¦V.
+			BkTpCurrDisplaySecSub(); // 2014/10/16 IOï¿½ï¿½V.
 			/*databack[0] = *GetPtrCDM2(20001+i);
 			*GetPtrCDM3(30001+i) = databack[0];
 			cnt = 1;
@@ -345,7 +351,7 @@ void EEPROMCmp(void)
 		OldKAndJSel = *(tempData[0].KAndJSel);
 		TpTypeMdSet();
 	}
-	// Fu 108/12/25 : ¥[¤J·Å«×¥¿­tª¬ºA
+	// Fu 108/12/25 : ï¿½[ï¿½Jï¿½Å«×¥ï¿½ï¿½tï¿½ï¿½ï¿½A
 	if(thermal_PosAndNeg[0][0] != 0)  
 	{
 		*(tempData[0].TempLinearErr) |= 0x0001;
@@ -453,7 +459,7 @@ void EEPROMCmp(void)
 	{
 		*(tempData[0].TempLinearErr) &= ~(0x0800);
 	}	
-	// Fu 108/12/25 : ¥[¤J±`·Å¥¿­t¦V·Å«×ª¬ºA
+	// Fu 108/12/25 : ï¿½[ï¿½Jï¿½`ï¿½Å¥ï¿½ï¿½tï¿½Vï¿½Å«×ªï¿½ï¿½A
 	if(L_Normal_Temp_Dir_Fg != 0) 
 	{
 		*(tempData[0].TempLinearErr) |= 0x1000;
@@ -482,7 +488,7 @@ void EEPROMCmp(void)
 	}		
 	//
 	//	Fu 100/12/01
-	//	§PÂ_³]©w­È¬O§_¦³ÅÜ¤Æ , ¦p¦³, ¨º¤G¬q¶W·Å¥\¯àFLAG°µ²M°£ªº°Ê§@
+	//	ï¿½Pï¿½_ï¿½]ï¿½wï¿½È¬Oï¿½_ï¿½ï¿½ï¿½Ü¤ï¿½ , ï¿½pï¿½ï¿½, ï¿½ï¿½ï¿½Gï¿½qï¿½Wï¿½Å¥\ï¿½ï¿½FLAGï¿½ï¿½ï¿½Mï¿½ï¿½ï¿½ï¿½ï¿½Ê§@
 	//
 	for(i=0; i<TpMaxLp; i++)
 	{
@@ -501,8 +507,8 @@ void EEPROMCmp(void)
 		ThermostatTm[i] = ((*(tempData[i].Thermostat) * Sec0100_TRIG_MS)/100);
 		ActThermostatTm[i] = (ThermostatTm[i] * *(tempData[i].Proportion))/100;
 		RelayTm[i] = *(tempData[i].CycleTm);
-		// Fu 108/01/03 : ¥i¥H¨C¬q¿W¥ß¿ï¾ÜMT12¼Ò¦¡©Î¬OMJ86¼Ò¦¡
-		if((*(tempData[0].ThermostatFun) & 0x8000) && ((*tempData[0].TwoUpFun & (0x01<<i)) == 0))	// 15 Bit : MJ86 - 12¬íPID¼Ò¦¡
+		// Fu 108/01/03 : ï¿½iï¿½Hï¿½Cï¿½qï¿½Wï¿½ß¿ï¿½ï¿½MT12ï¿½Ò¦ï¿½ï¿½Î¬OMJ86ï¿½Ò¦ï¿½
+		if((*(tempData[0].ThermostatFun) & 0x8000) && ((*tempData[0].TwoUpFun & (0x01<<i)) == 0))	// 15 Bit : MJ86 - 12ï¿½ï¿½PIDï¿½Ò¦ï¿½
 		{ 
 			OutputPwmMaxUnit[i] = 4095;
 		}
@@ -902,14 +908,14 @@ unsigned short AD2Temp(unsigned short chip_no, unsigned short channel_no)
 	calc = 0;
 	for(i=4, j=0 ;i<(ch1_sec_num[tp_ch_index[chip_no][channel_no]]-1); i++, j++)
 	{
-		//		// ­t­È										// ¹s«×¥H¤U
+		//		// ï¿½tï¿½ï¿½										// ï¿½sï¿½×¥Hï¿½U
 		if(((thermal[chip_no] & 0x8000) == 0x8000) || (thermal[chip_no] <= ch1[tp_ch_index[chip_no][channel_no]][4]))		 	
 		{
 			//calc = 0;
 			//	Fu 105/12/02
-			// 1558 : -40«×
-			// 2985 : -80«×
-			// 4234 : -120«×
+			// 1558 : -40ï¿½ï¿½
+			// 2985 : -80ï¿½ï¿½
+			// 4234 : -120ï¿½ï¿½
 			TempPosAndNegFg = 1;
 			if((thermal[chip_no] & 0x8000) == 0x8000)
 			{
@@ -933,7 +939,7 @@ unsigned short AD2Temp(unsigned short chip_no, unsigned short channel_no)
 				calc = ((BkTempHwUnit-2985) * 400) / (4234-2985) + 800;
 			}
 			break;
-		}		 // ¶}¸ô                                      // Â_¸ô
+		}		 // ï¿½}ï¿½ï¿½                                      // ï¿½_ï¿½ï¿½
 		else if((thermal[chip_no] == 0x7fff) ||  (thermal[chip_no] >= ch1[tp_ch_index[chip_no][channel_no]][(ch1_sec_num[tp_ch_index[chip_no][channel_no]]-1)]))
 		{
 			calc = 12000;
@@ -1271,18 +1277,18 @@ Right_temperature_IC(void)
 //	if(r_value < 0)  // 2018/12/10 by kf
 //		return (r_value - r_fraction);  // 2018/12/10 by kf
   // Check if original temperature value is negative
-	// Fu 108/12/25 : ¥[¤J±`·Å­t·Å«×ª¬ºA
+	// Fu 108/12/25 : ï¿½[ï¿½Jï¿½`ï¿½Å­tï¿½Å«×ªï¿½ï¿½A
 	if(r_value & 0x8000)  // 2018/12/10 by kf
 	{
     // Clear pseudo negative flag(bit-7)
 		r_value = r_value & 0x0FFF;  // 2018/12/10 by kf
-		R_Normal_Temp_Dir_Fg = 1;	// ­t·Å«×
+		R_Normal_Temp_Dir_Fg = 1;	// ï¿½tï¿½Å«ï¿½
 		
 		return (r_value + r_fraction) * -1;  // 2018/12/10 by kf
 	}
 	else
 	{
-		R_Normal_Temp_Dir_Fg = 0;	// ¥¿·Å«×
+		R_Normal_Temp_Dir_Fg = 0;	// ï¿½ï¿½ï¿½Å«ï¿½
 		return (r_value + r_fraction);
 	}
 }
@@ -1520,18 +1526,18 @@ Left_temperature_IC(void)
 //	if(l_value < 0)  // 2018/12/10 by kf
 //		return (l_value - l_fraction);  // 2018/12/10 by kf
 	// Check if original temperature value is negative
-	// Fu 108/12/25 : ¥[¤J±`·Å­t·Å«×ª¬ºA
+	// Fu 108/12/25 : ï¿½[ï¿½Jï¿½`ï¿½Å­tï¿½Å«×ªï¿½ï¿½A
 	if(l_value & 0x8000)  // 2018/12/10 by kf
 	{
     // Clear pseudo negative flag(bit-7)
 		l_value = l_value & 0x0FFF;  // 2018/12/10 by kf
 		
-		L_Normal_Temp_Dir_Fg = 1;	// ­t·Å«×
+		L_Normal_Temp_Dir_Fg = 1;	// ï¿½tï¿½Å«ï¿½
 		return (l_value + l_fraction) * -1;  // 2018/12/10 by kf
 	}
 	else
 	{
-		L_Normal_Temp_Dir_Fg = 0;	// ¥¿·Å«×
+		L_Normal_Temp_Dir_Fg = 0;	// ï¿½ï¿½ï¿½Å«ï¿½
 		return (l_value + l_fraction);
 	}
 }
@@ -1569,16 +1575,16 @@ void TempHWSave(void)
 					calc = AD2Temp(0x0, ch_index);
 					//Nthermal_couple[0][ch_index] = ((short)(calc+l_r_temperature) > 12000) ? 12000 : (short)(calc + l_r_temperature);  // 2017/06/09 by kf
 					//	Fu 105/12/02
-					if(TempPosAndNegFg != 0)	// ®Æ·Å¬°­t·Å«× ?
+					if(TempPosAndNegFg != 0)	// ï¿½Æ·Å¬ï¿½ï¿½tï¿½Å«ï¿½ ?
 					{
-						if(R_L_Normal_Temp_Dir_Fg != 0)	// ±`·Å¬°­t·Å«×
+						if(R_L_Normal_Temp_Dir_Fg != 0)	// ï¿½`ï¿½Å¬ï¿½ï¿½tï¿½Å«ï¿½
 						{
 							Nthermal_couple[0][ch_index] = l_r_temperature + calc;
-							thermal_PosAndNeg[0][ch_index] = 1;// ­t·Å«×
+							thermal_PosAndNeg[0][ch_index] = 1;// ï¿½tï¿½Å«ï¿½
 						}
 						else
 						{
-							if(l_r_temperature >= calc)	// ±`·Å¬°¥¿·Å«×
+							if(l_r_temperature >= calc)	// ï¿½`ï¿½Å¬ï¿½ï¿½ï¿½ï¿½Å«ï¿½
 							{
 								Nthermal_couple[0][ch_index] = l_r_temperature - calc;
 								thermal_PosAndNeg[0][ch_index] = 0; // Fu 107/12/10
@@ -1593,10 +1599,10 @@ void TempHWSave(void)
 					}
 					else
 					{
-						// Fu 108/12/25 : ¥[¤J±`·Å­t·Å«×ª¬ºA
-						if(R_L_Normal_Temp_Dir_Fg != 0)	// ±`·Å¬°­t·Å«×
+						// Fu 108/12/25 : ï¿½[ï¿½Jï¿½`ï¿½Å­tï¿½Å«×ªï¿½ï¿½A
+						if(R_L_Normal_Temp_Dir_Fg != 0)	// ï¿½`ï¿½Å¬ï¿½ï¿½tï¿½Å«ï¿½
 						{
-							if(l_r_temperature >= calc)	// ±`·Å¬°­t·Å«×
+							if(l_r_temperature >= calc)	// ï¿½`ï¿½Å¬ï¿½ï¿½tï¿½Å«ï¿½
 							{
 								Nthermal_couple[0][ch_index] = l_r_temperature - calc;
 								//
@@ -1644,14 +1650,14 @@ void TempHWSave(void)
 							thermal_PosAndNeg[1][ch_index] = 1; // Fu 107/12/10
 						}*/
 						//
-						if(R_L_Normal_Temp_Dir_Fg != 0)	// ±`·Å¬°­t·Å«×
+						if(R_L_Normal_Temp_Dir_Fg != 0)	// ï¿½`ï¿½Å¬ï¿½ï¿½tï¿½Å«ï¿½
 						{
 							Nthermal_couple[1][ch_index] = l_r_temperature + calc;
-							thermal_PosAndNeg[1][ch_index] = 1;// ­t·Å«×
+							thermal_PosAndNeg[1][ch_index] = 1;// ï¿½tï¿½Å«ï¿½
 						}
 						else
 						{
-							if(l_r_temperature >= calc)	// ±`·Å¬°¥¿·Å«×
+							if(l_r_temperature >= calc)	// ï¿½`ï¿½Å¬ï¿½ï¿½ï¿½ï¿½Å«ï¿½
 							{
 								Nthermal_couple[1][ch_index] = l_r_temperature - calc;
 								thermal_PosAndNeg[1][ch_index] = 0; // Fu 107/12/10
@@ -1670,10 +1676,10 @@ void TempHWSave(void)
 						Nthermal_couple[1][ch_index] = ((calc+l_r_temperature) > 12000) ? 12000 : (calc + l_r_temperature);  // 2012/05/08
 						thermal_PosAndNeg[1][ch_index] = 0; // Fu 107/12/10
 						*/
-						// Fu 108/12/25 : ¥[¤J±`·Å­t·Å«×ª¬ºA
-						if(R_L_Normal_Temp_Dir_Fg != 0)	// ±`·Å¬°­t·Å«×
+						// Fu 108/12/25 : ï¿½[ï¿½Jï¿½`ï¿½Å­tï¿½Å«×ªï¿½ï¿½A
+						if(R_L_Normal_Temp_Dir_Fg != 0)	// ï¿½`ï¿½Å¬ï¿½ï¿½tï¿½Å«ï¿½
 						{
-							if(l_r_temperature >= calc)	// ±`·Å¬°­t·Å«×
+							if(l_r_temperature >= calc)	// ï¿½`ï¿½Å¬ï¿½ï¿½tï¿½Å«ï¿½
 							{
 								Nthermal_couple[1][ch_index] = l_r_temperature - calc;
 								//
@@ -1721,14 +1727,14 @@ void TempHWSave(void)
 							thermal_PosAndNeg[2][ch_index] = 1; // Fu 107/12/10
 						}*/
 						//
-						if(R_L_Normal_Temp_Dir_Fg != 0)	// ±`·Å¬°­t·Å«×
+						if(R_L_Normal_Temp_Dir_Fg != 0)	// ï¿½`ï¿½Å¬ï¿½ï¿½tï¿½Å«ï¿½
 						{
 							Nthermal_couple[2][ch_index] = l_r_temperature + calc;
-							thermal_PosAndNeg[2][ch_index] = 1;// ­t·Å«×
+							thermal_PosAndNeg[2][ch_index] = 1;// ï¿½tï¿½Å«ï¿½
 						}
 						else
 						{
-							if(l_r_temperature >= calc)	// ±`·Å¬°¥¿·Å«×
+							if(l_r_temperature >= calc)	// ï¿½`ï¿½Å¬ï¿½ï¿½ï¿½ï¿½Å«ï¿½
 							{
 								Nthermal_couple[2][ch_index] = l_r_temperature - calc;
 								thermal_PosAndNeg[2][ch_index] = 0; // Fu 107/12/10
@@ -1747,10 +1753,10 @@ void TempHWSave(void)
 						Nthermal_couple[2][ch_index] = ((calc+l_r_temperature) > 12000) ? 12000 : (calc + l_r_temperature);  // 2012/05/08
 						thermal_PosAndNeg[2][ch_index] = 0; // Fu 107/12/10
 						*/
-						// Fu 108/12/25 : ¥[¤J±`·Å­t·Å«×ª¬ºA
-						if(R_L_Normal_Temp_Dir_Fg != 0)	// ±`·Å¬°­t·Å«×
+						// Fu 108/12/25 : ï¿½[ï¿½Jï¿½`ï¿½Å­tï¿½Å«×ªï¿½ï¿½A
+						if(R_L_Normal_Temp_Dir_Fg != 0)	// ï¿½`ï¿½Å¬ï¿½ï¿½tï¿½Å«ï¿½
 						{
-							if(l_r_temperature >= calc)	// ±`·Å¬°­t·Å«×
+							if(l_r_temperature >= calc)	// ï¿½`ï¿½Å¬ï¿½ï¿½tï¿½Å«ï¿½
 							{
 								Nthermal_couple[2][ch_index] = l_r_temperature - calc;
 								//
@@ -1865,59 +1871,59 @@ void TempHWSave(void)
 				I2C2_MUX_unlock();
 			}
 #endif
-			// Fu 108/12/25 : ¥[¤J±`·Å­t·Å«×Åã¥Üª¬ºA
-			if(R_Normal_Temp_Dir_Fg != 0)	// ¥k±`·Å¬°­t·Å«×
+			// Fu 108/12/25 : ï¿½[ï¿½Jï¿½`ï¿½Å­tï¿½Å«ï¿½ï¿½ï¿½Üªï¿½ï¿½A
+			if(R_Normal_Temp_Dir_Fg != 0)	// ï¿½kï¿½`ï¿½Å¬ï¿½ï¿½tï¿½Å«ï¿½
 			{
 				if(L_Normal_Temp_Dir_Fg != 0)
 				{
 					l_r_temperature = ((l_temperature + r_temperature) / 2);
-					R_L_Normal_Temp_Dir_Fg = 1;	// ±`·Å¬°­t·Å«×
+					R_L_Normal_Temp_Dir_Fg = 1;	// ï¿½`ï¿½Å¬ï¿½ï¿½tï¿½Å«ï¿½
 				}
 				else
 				{
-					if(l_temperature >= r_temperature)	// ¥ª±`·Å¬°¥¿·Å«× , ¥k¬°­t·Å«×
+					if(l_temperature >= r_temperature)	// ï¿½ï¿½ï¿½`ï¿½Å¬ï¿½ï¿½ï¿½ï¿½Å«ï¿½ , ï¿½kï¿½ï¿½ï¿½tï¿½Å«ï¿½
 					{
 						l_r_temperature = ((l_temperature - r_temperature) / 2);
-						R_L_Normal_Temp_Dir_Fg = 0;	// ±`·Å¬°¥¿·Å«×
+						R_L_Normal_Temp_Dir_Fg = 0;	// ï¿½`ï¿½Å¬ï¿½ï¿½ï¿½ï¿½Å«ï¿½
 					}
 					else
 					{
 						l_r_temperature = ((r_temperature - r_temperature) / 2);
 						if(l_r_temperature == 0)
 						{
-							R_L_Normal_Temp_Dir_Fg = 0;	// ±`·Å¬°­t·Å«×
+							R_L_Normal_Temp_Dir_Fg = 0;	// ï¿½`ï¿½Å¬ï¿½ï¿½tï¿½Å«ï¿½
 						}
 						else
 						{
-							R_L_Normal_Temp_Dir_Fg = 1;	// ±`·Å¬°­t·Å«×
+							R_L_Normal_Temp_Dir_Fg = 1;	// ï¿½`ï¿½Å¬ï¿½ï¿½tï¿½Å«ï¿½
 						}
 					}
 				}
 			}
-			else if(L_Normal_Temp_Dir_Fg != 0)	// ¥ª±`·Å¬°­t·Å«× , ¥k±`·Å¬°¥¿·Å«×
+			else if(L_Normal_Temp_Dir_Fg != 0)	// ï¿½ï¿½ï¿½`ï¿½Å¬ï¿½ï¿½tï¿½Å«ï¿½ , ï¿½kï¿½`ï¿½Å¬ï¿½ï¿½ï¿½ï¿½Å«ï¿½
 			{
 					if(r_temperature >= l_temperature)	
 					{
 						l_r_temperature = ((r_temperature - l_temperature) / 2);
-						R_L_Normal_Temp_Dir_Fg = 0;	// ±`·Å¬°¥¿·Å«×
+						R_L_Normal_Temp_Dir_Fg = 0;	// ï¿½`ï¿½Å¬ï¿½ï¿½ï¿½ï¿½Å«ï¿½
 					}
 					else
 					{
 						l_r_temperature = ((l_temperature - r_temperature) / 2);
 						if(l_r_temperature == 0)
 						{
-							R_L_Normal_Temp_Dir_Fg = 0;	// ±`·Å¬°­t·Å«×
+							R_L_Normal_Temp_Dir_Fg = 0;	// ï¿½`ï¿½Å¬ï¿½ï¿½tï¿½Å«ï¿½
 						}
 						else
 						{
-							R_L_Normal_Temp_Dir_Fg = 1;	// ±`·Å¬°­t·Å«×
+							R_L_Normal_Temp_Dir_Fg = 1;	// ï¿½`ï¿½Å¬ï¿½ï¿½tï¿½Å«ï¿½
 						}
 					}
 			}
 			else
 			{
 				l_r_temperature = (l_temperature + r_temperature) / 2;
-				R_L_Normal_Temp_Dir_Fg = 0;	// ±`·Å¬°¥¿·Å«×
+				R_L_Normal_Temp_Dir_Fg = 0;	// ï¿½`ï¿½Å¬ï¿½ï¿½ï¿½ï¿½Å«ï¿½
 			}
 			//
 			StepCnt = 0;		// reboot
@@ -2021,7 +2027,7 @@ void TempIintData(void)
 		tempData[i].AutoHeatMainSwitch = GetPtrCDM2(20573);
 		tempData[i].AutoHeatBranchSwitch = GetPtrCDM2(20403);
 		tempData[i].AutoPerHeatBranchSwitch = GetPtrCDM2(20404);
-		tempData[i].HeatWattUnit = GetPtrCDM2(20431+i);	// Fu 108/12/30 : ¥[¤J³Æ¥÷¨C¬q·Å«×ªº¥[¼ö¥Ë¯S¼Æ
+		tempData[i].HeatWattUnit = GetPtrCDM2(20431+i);	// Fu 108/12/30 : ï¿½[ï¿½Jï¿½Æ¥ï¿½ï¿½Cï¿½qï¿½Å«×ªï¿½ï¿½[ï¿½ï¿½ï¿½Ë¯Sï¿½ï¿½
 		tempData[i].Week = GetPtrCDM2(20566);
 		tempData[i].Sec = GetPtrCDM2(20567);
 		tempData[i].Min = GetPtrCDM2(20568);
@@ -2179,9 +2185,9 @@ void Synchronization(void)
   for(i=0; i<TpMaxLp; i++)
   {
 		//	Fu 104/07/08
-		TpSetRang[i] = *(tempData[i].TpControl) / 50;	// ¥[¼ö­È¤À¬°50µ¥¥÷°µ·Å«×±±¨î
+		TpSetRang[i] = *(tempData[i].TpControl) / 50;	// ï¿½[ï¿½ï¿½ï¿½È¤ï¿½ï¿½ï¿½50ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Å«×±ï¿½ï¿½ï¿½
 		//
-		if((*(tempData[i].TpDisplay) >= *(tempData[i].TpControl)) || (!(*(tempData[0].SynchronFun) & (0x01<<i))) || (BkPidPUnit[i] == OFF) || (*(tempData[i].TpControl) == OFF) || (*(tempData[i].TpControl) == 0xffff)) // 2015/07/31 ­Y¥[¼ö­È¤p©ó150«×, «h¦P¨B¤É·Å¤£¨Ï¥Î.
+		if((*(tempData[i].TpDisplay) >= *(tempData[i].TpControl)) || (!(*(tempData[0].SynchronFun) & (0x01<<i))) || (BkPidPUnit[i] == OFF) || (*(tempData[i].TpControl) == OFF) || (*(tempData[i].TpControl) == 0xffff)) // 2015/07/31 ï¿½Yï¿½[ï¿½ï¿½ï¿½È¤pï¿½ï¿½150ï¿½ï¿½, ï¿½hï¿½Pï¿½Bï¿½É·Å¤ï¿½ï¿½Ï¥ï¿½.
 		{
 			if(!(*(tempData[0].TwoHeatMd) & (0x01<<i)) || ((*(tempData[0].TwoHeatMd) & (0x01<<i)) && (TwoHeatSetTm[i] == (Tm1Sec1_TRIG_MS * *(tempData[i].TwoHeatTm))))) // 2016/01/08
 			{
@@ -2212,17 +2218,17 @@ void Synchronization(void)
 		{
 			for(j = 0; j < 40; j++)
 			{
-				TempSetUnit[i][j] = ((*(tempData[i].TpControl) - 300) * (j+1)) / 40; // 0% ~ 90% §Ö³t
+				TempSetUnit[i][j] = ((*(tempData[i].TpControl) - 300) * (j+1)) / 40; // 0% ~ 90% ï¿½Ö³t
 			}
 			//
 			for(j = 0; j < 5; j++)
 			{
-				TempSetUnit[i][j+40] = ((200 * (j+1)) / 5) + TempSetUnit[i][39];	// 91% ~ 95% ¤¤³t
+				TempSetUnit[i][j+40] = ((200 * (j+1)) / 5) + TempSetUnit[i][39];	// 91% ~ 95% ï¿½ï¿½ï¿½t
 			}
 			//
 			for(j = 0; j < 5; j++)
 			{
-				TempSetUnit[i][j+45] = ((100 * (j+1)) / 5) + TempSetUnit[i][44];	// 96% ~ 100%ºC³t
+				TempSetUnit[i][j+45] = ((100 * (j+1)) / 5) + TempSetUnit[i][44];	// 96% ~ 100%ï¿½Cï¿½t
 			}
 			//
 			InitBellBuffFg |= (0x01<<i);
@@ -2234,7 +2240,7 @@ void Synchronization(void)
 	else
     SynFg = TpMaxLp;
 	//
-	//	Fu 102/12/27 : ¦P¨B¤É·Å±±¨îª¬ºA¤ÏÀ³
+	//	Fu 102/12/27 : ï¿½Pï¿½Bï¿½É·Å±ï¿½ï¿½îª¬ï¿½Aï¿½ï¿½ï¿½ï¿½
 	//
 	*GetPtrCDM2(20560) = TpClLpFg4;
 }
@@ -2256,14 +2262,14 @@ void HeatErrMd(void)
 		        else
 		        {
 		            if((OldTempSetSum[i] <= 10) && (*(tempData[0].HeatCtrlMd) & 0x0007) && (*(tempData[i].TpControl) != OFF) && (*(tempData[i].TpControl) != 0xffff) && (*(tempData[i].TpDisplay) <= 5900))		                                              // åŠ ç†±ç•°å¸¸ >1.00 c
-		                *(tempData[0].HeatErrSts) = *(tempData[0].HeatErrSts) | (0x01<<i);      // 43610åŠ çset€0~7 bit)
+		                *(tempData[0].HeatErrSts) = *(tempData[0].HeatErrSts) | (0x01<<i);      // 43610åŠ ï¿½setï¿½0~7 bit)
 		            else
-		                *(tempData[0].HeatErrSts) = *(tempData[0].HeatErrSts) & ~(0x01<<i);   	// 43610åŠ çclr 0~7 bit)
+		                *(tempData[0].HeatErrSts) = *(tempData[0].HeatErrSts) & ~(0x01<<i);   	// 43610åŠ ï¿½clr 0~7 bit)
 		        }
 			}
 			else					   
 			{
-		     	*(tempData[0].HeatErrSts) = *(tempData[0].HeatErrSts) & ~(0x01<<i);   // 43610åŠ çclr 0~7 bit)
+		     	*(tempData[0].HeatErrSts) = *(tempData[0].HeatErrSts) & ~(0x01<<i);   // 43610åŠ ï¿½clr 0~7 bit)
 				OldTempSetSum[i] = 200; 
 			}
 	        //
@@ -2348,10 +2354,10 @@ void TpDriveOffNot(unsigned short TpCh)
 	}
 }
 ///////////////////
-//	MMI 53521 : ·Å«×·P´ú¹ï½Õ¨Ó·½
-//	MMI 53545 : ·Å«×·P´ú¹ï½Õ¥Øªº
-//	MMI 53569 : ·Å«×¿é¥X¹ï½Õ¨Ó·½
-//	MMI 53593 : ·Å«×¿é¥X¹ï½Õ¥Øªº
+//	MMI 53521 : ï¿½Å«×·Pï¿½ï¿½ï¿½ï¿½Õ¨Ó·ï¿½
+//	MMI 53545 : ï¿½Å«×·Pï¿½ï¿½ï¿½ï¿½Õ¥Øªï¿½
+//	MMI 53569 : ï¿½Å«×¿ï¿½Xï¿½ï¿½Õ¨Ó·ï¿½
+//	MMI 53593 : ï¿½Å«×¿ï¿½Xï¿½ï¿½Õ¥Øªï¿½
 //	Fu 103/10/01
 //
 void BkTpCurrDisplaySecSub(void)
@@ -2368,24 +2374,24 @@ void BkTpCurrDisplaySecSub(void)
 	//
 	for(i = 0; i < TpMaxLp; i++)
 	{
-		if(*(tempData[i].TpSensorSour) > TpMaxLp)	// ·Å«×·P´ú¹ï½Õ¨Ó·½
+		if(*(tempData[i].TpSensorSour) > TpMaxLp)	// ï¿½Å«×·Pï¿½ï¿½ï¿½ï¿½Õ¨Ó·ï¿½
 			*(tempData[i].TpSensorSour) = OFF;
 		//
-		if(*(tempData[i].TpSensorDest) > TpMaxLp) // ·Å«×·P´ú¹ï½Õ¥Øªº
+		if(*(tempData[i].TpSensorDest) > TpMaxLp) // ï¿½Å«×·Pï¿½ï¿½ï¿½ï¿½Õ¥Øªï¿½
 			*(tempData[i].TpSensorDest) = OFF;
 		//
-		if(*(tempData[i].TpPointSour) > TpMaxLp)	// ·Å«×¿é¥X¹ï½Õ¨Ó·½
+		if(*(tempData[i].TpPointSour) > TpMaxLp)	// ï¿½Å«×¿ï¿½Xï¿½ï¿½Õ¨Ó·ï¿½
 			*(tempData[i].TpPointSour) = OFF;
 		//
-		if(*(tempData[i].TpPointDest) > TpMaxLp) 	// ·Å«×¿é¥X¹ï½Õ¥Øªº
+		if(*(tempData[i].TpPointDest) > TpMaxLp) 	// ï¿½Å«×¿ï¿½Xï¿½ï¿½Õ¥Øªï¿½
 			*(tempData[i].TpPointDest) = OFF;
 	}
 	//
 	TpChgMdErrorFg = OFF;
-	TpChgMdErrorFg = CmpIOChgPointStatsSub(TpMaxLp, TpMaxLp, 20121, &TpChgMdErrorFg, 0x0001); 	// ·Å«×·P´ú¹ï½Õ¨Ó·½
-	TpChgMdErrorFg = CmpIOChgPointStatsSub(TpMaxLp, TpMaxLp, 20136, &TpChgMdErrorFg, 0x0002); 	// ·Å«×·P´ú¹ï½Õ¥Øªº
-	TpChgMdErrorFg = CmpIOChgPointStatsSub(TpMaxLp, TpMaxLp, 20151, &TpChgMdErrorFg, 0x0004); 	// ·Å«×¿é¥X¹ï½Õ¨Ó·½
-	TpChgMdErrorFg = CmpIOChgPointStatsSub(TpMaxLp, TpMaxLp, 20166, &TpChgMdErrorFg, 0x0008); 	// ·Å«×¿é¥X¹ï½Õ¥Øªº
+	TpChgMdErrorFg = CmpIOChgPointStatsSub(TpMaxLp, TpMaxLp, 20121, &TpChgMdErrorFg, 0x0001); 	// ï¿½Å«×·Pï¿½ï¿½ï¿½ï¿½Õ¨Ó·ï¿½
+	TpChgMdErrorFg = CmpIOChgPointStatsSub(TpMaxLp, TpMaxLp, 20136, &TpChgMdErrorFg, 0x0002); 	// ï¿½Å«×·Pï¿½ï¿½ï¿½ï¿½Õ¥Øªï¿½
+	TpChgMdErrorFg = CmpIOChgPointStatsSub(TpMaxLp, TpMaxLp, 20151, &TpChgMdErrorFg, 0x0004); 	// ï¿½Å«×¿ï¿½Xï¿½ï¿½Õ¨Ó·ï¿½
+	TpChgMdErrorFg = CmpIOChgPointStatsSub(TpMaxLp, TpMaxLp, 20166, &TpChgMdErrorFg, 0x0008); 	// ï¿½Å«×¿ï¿½Xï¿½ï¿½Õ¥Øªï¿½
 	//
 	for(i = 0; i < 4; i++) // Show Alarm.
 	{
@@ -2400,7 +2406,7 @@ void BkTpCurrDisplaySecSub(void)
 	TpUsedStsFg1 = OFF;
 	//
 	for(i = 0; i < TpMaxLp; i++)
-	{  //  ·Å«×·P´ú¹ï½Õ¨Ó·½     ·Å«×·P´ú¹ï½Õ¥Øªº     
+	{  //  ï¿½Å«×·Pï¿½ï¿½ï¿½ï¿½Õ¨Ó·ï¿½     ï¿½Å«×·Pï¿½ï¿½ï¿½ï¿½Õ¥Øªï¿½     
 		if(*(tempData[i].TpSensorSour) && *(tempData[i].TpSensorDest) && !(*(tempData[0].TpChgError) & (0x0003)))
 		{
 			TpSourPoint = *(tempData[i].TpSensorSour) - 1;
@@ -2419,7 +2425,7 @@ void BkTpCurrDisplaySecSub(void)
 			else
 				TemperatureSensor[i] = i;
 		}
-		// ·Å«×¿é¥X¹ï½Õ¨Ó·½     ·Å«×¿é¥X¹ï½Õ¥Øªº     
+		// ï¿½Å«×¿ï¿½Xï¿½ï¿½Õ¨Ó·ï¿½     ï¿½Å«×¿ï¿½Xï¿½ï¿½Õ¥Øªï¿½     
 		if(*(tempData[i].TpPointSour) && *(tempData[i].TpPointDest) && !(*(tempData[0].TpChgError) & (0x000c)))
 		{
 			TpSourPoint = *(tempData[i].TpPointSour) - 1;
