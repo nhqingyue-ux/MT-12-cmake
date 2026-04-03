@@ -544,7 +544,14 @@ void RS485TxSub(void)
 		RsTxRxSts = 0x04;
 	}
 	//
-	if(SendRs485Fg != 0u)
+	if(SendRs485Fg == 0u)
+	{
+		// Defensive: ensure PA12 is LOW (receive mode) when not sending.
+		// ISR may set PA12 HIGH (via Package_extract) but if the prepared
+		// response was invalid or timing raced, PA12 could stay HIGH forever.
+		USART1_RTS_L;
+	}
+	else
 	{
 		// Send data from RS-485
 		if(SendRs485Fg == 1)
@@ -553,6 +560,8 @@ void RS485TxSub(void)
 			for(i=0; i<250; i++)
 				tx_buffer_bk[i] = tx_buffer[i];
 			TimerBase3=0;
+			// Set RTS HIGH here (moved from ISR) — only when actually about to send
+			USART1_RTS_H;
 		}
 		else
 		{

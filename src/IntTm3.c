@@ -226,7 +226,7 @@ Package_extract(void)
 				//
 				TimerBase3 = 0;
 //				SendRs485Fg = 1;  // 2018/02/26 by kf
-				USART1_RTS_H;
+				// USART1_RTS_H; // Moved to RS485TxSub
 				SendRs485Fg = 1;  // 2018/02/26 by kf
 				TimerBase22 = 0;
 				//MainRS485TxSub();
@@ -326,7 +326,7 @@ Package_extract(void)
 				//
 				TimerBase3 = 0;
 //				SendRs485Fg = 1;  // 2018/02/26 by kf
-				USART1_RTS_H;
+				// USART1_RTS_H; // Moved to RS485TxSub
 				SendRs485Fg = 1;  // 2018/02/26 by kf
 				TimerBase22 = 0;
 				//MainRS485TxSub();
@@ -391,7 +391,7 @@ Package_extract(void)
 				//
 				TimerBase3 = 0;
 //				SendRs485Fg = 1;  // 2018/02/26 by kf
-				USART1_RTS_H;
+				// USART1_RTS_H; // Moved to RS485TxSub
 				SendRs485Fg = 1;  // 2018/02/26 by kf
 				TimerBase22 = 0;
 				//MainRS485TxSub();
@@ -472,7 +472,7 @@ Package_extract(void)
 						//
 						TimerBase3 = 0;
 	//				SendRs485Fg = 1;  // 2018/02/26 by kf
-					USART1_RTS_H;
+					// USART1_RTS_H; // Moved to RS485TxSub
 					SendRs485Fg = 1;  // 2018/02/26 by kf
 					}
 					//
@@ -484,7 +484,7 @@ Package_extract(void)
 				//
 				TimerBase3 = 0;
 //				SendRs485Fg = 1;  // 2018/02/26 by kf
-				USART1_RTS_H;
+				// USART1_RTS_H; // Moved to RS485TxSub
 				SendRs485Fg = 1;  // 2018/02/26 by kf
 				TimerBase22 = 0;
 				//MainRS485TxSub();
@@ -558,7 +558,7 @@ Package_extract(void)
 						//
 						TimerBase3 = 0;
 		//				SendRs485Fg = 1;  // 2018/02/26 by kf
-						USART1_RTS_H;
+						// USART1_RTS_H; // Moved to RS485TxSub
 						SendRs485Fg = 1;  // 2018/02/26 by kf
 						//
 					}  // end of if
@@ -570,7 +570,7 @@ Package_extract(void)
 				//
 				TimerBase3 = 0;
 //				SendRs485Fg = 1;  // 2018/02/26 by kf
-				USART1_RTS_H;
+				// USART1_RTS_H; // Moved to RS485TxSub
 				SendRs485Fg = 1;  // 2018/02/26 by kf
 				TimerBase22 = 0;
 				//MainRS485TxSub();
@@ -623,7 +623,7 @@ Package_extract(void)
 				//
 				TimerBase3 = 0;
 //				SendRs485Fg = 1;  // 2018/02/26 by kf
-				USART1_RTS_H;
+				// USART1_RTS_H; // Moved to RS485TxSub
 				SendRs485Fg = 1;  // 2018/02/26 by kf
 				TimerBase22 = 0;
 				//MainRS485TxSub();
@@ -669,7 +669,7 @@ Package_extract(void)
 							//
 							TimerBase3 = 0;
 			//				SendRs485Fg = 1;  // 2018/02/26 by kf
-							USART1_RTS_H;
+							// USART1_RTS_H; // Moved to RS485TxSub
 							SendRs485Fg = 1;  // 2018/02/26 by kf
 							//
 						}
@@ -684,7 +684,7 @@ Package_extract(void)
 				//
 				TimerBase3 = 0;
 //				SendRs485Fg = 1;  // 2018/02/26 by kf
-				USART1_RTS_H;
+				// USART1_RTS_H; // Moved to RS485TxSub
 				SendRs485Fg = 1;  // 2018/02/26 by kf
 				TimerBase22 = 0;
 				//MainRS485TxSub();
@@ -704,7 +704,7 @@ Package_extract(void)
 				}*/
 				TimerBase3 = 0;
 //				SendRs485Fg = 1;  // 2018/02/26 by kf
-				USART1_RTS_H;
+				// USART1_RTS_H; // Moved to RS485TxSub
 				SendRs485Fg = 1;  // 2018/02/26 by kf
 				TimerBase22 = 0;
 				//MainRS485TxSub();			
