@@ -29,9 +29,13 @@ unsigned char alpum_tx_data[8]  = {0};
 unsigned char alpum_rx_data[10] = {0};
 unsigned char alpum_ex_data[8]  = {0};
 
-void _alpum_process(void)
+unsigned char _alpum_process(void)
 {
-    /* stub — original in alpum.lib / alpum_new.lib (Keil .lib) */
+    /* stub — original in alpum.lib / alpum_new.lib (Keil .lib)
+     * MUST return 0 (success). Returning non-zero triggers the encryption
+     * check failure path in CDMInit → while(1) infinite loop.
+     * The original function returns unsigned char status. */
+    return 0;
 }
 
 /* ── rand seed (used by our stdlib.h stub) ──────────────────────────────── */
