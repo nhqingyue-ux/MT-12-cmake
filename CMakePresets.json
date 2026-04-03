@@ -1,0 +1,38 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": { "major": 3, "minor": 21, "patch": 0 },
+
+  "configurePresets": [
+    {
+      "name": "default",
+      "displayName": "Default (Ninja + arm-none-eabi-gcc)",
+      "description": "Builds both M4Temp firmware and rs485-echo test",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "toolchainFile": "${sourceDir}/cmake/arm-none-eabi.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    }
+  ],
+
+  "buildPresets": [
+    {
+      "name": "main",
+      "displayName": "Build M4Temp.elf (main firmware)",
+      "configurePreset": "default",
+      "targets": ["M4Temp.elf"]
+    },
+    {
+      "name": "rs485-echo",
+      "displayName": "Build rs485_echo.elf (RS485 echo test)",
+      "configurePreset": "default",
+      "targets": ["rs485_echo.elf"]
+    },
+    {
+      "name": "all",
+      "displayName": "Build all targets",
+      "configurePreset": "default"
+    }
+  ]
+}
