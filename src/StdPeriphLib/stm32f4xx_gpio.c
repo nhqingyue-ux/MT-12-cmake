@@ -402,7 +402,9 @@ void GPIO_ResetBits(GPIO_TypeDef* GPIOx, uint16_t GPIO_Pin)
   assert_param(IS_GPIO_ALL_PERIPH(GPIOx));
   assert_param(IS_GPIO_PIN(GPIO_Pin));
 
-  GPIOx->BSRRH = GPIO_Pin;
+  /* BSRR is a single 32-bit register in new CMSIS headers.
+     Bits [31:16] = BRy (reset).  Write GPIO_Pin shifted left by 16. */
+  GPIOx->BSRR = (uint32_t)GPIO_Pin << 16;
 }
 
 /**
@@ -429,7 +431,7 @@ void GPIO_WriteBit(GPIO_TypeDef* GPIOx, uint16_t GPIO_Pin, BitAction BitVal)
   }
   else
   {
-    GPIOx->BSRRH = GPIO_Pin ;
+    GPIOx->BSRR = (uint32_t)GPIO_Pin << 16;
   }
 }
 

@@ -34,10 +34,12 @@ typedef enum {ERROR = 0, SUCCESS = !ERROR} ErrorStatus;
    Pulled from stm32f407xx.h IRQn_Type — already included above.            */
 
 /* ── GPIO BSRR compatibility (new CMSIS has single BSRR, old SPL uses BSRRL/BSRRH) */
-/* In new CMSIS stm32f407xx.h, GPIO_TypeDef has single BSRR (32-bit).
-   Old SPL splits into BSRRL (low 16) and BSRRH (high 16). Add aliases: */
+/* New CMSIS stm32f407xx.h has a single 32-bit BSRR field.
+   Old SPL splits it into BSRRL (low 16-bit, SET) and BSRRH (high 16-bit, RESET).
+   Fix: GPIOx->BSRRH must be a 16-bit write at offset +2 from BSRR. */
+/* We override GPIO_ResetBits in the SPL source instead of aliasing here,
+   because a simple #define can't fix the offset/width mismatch. */
 #define BSRRL   BSRR
-#define BSRRH   BSRR    /* writes to high half handled by SPL shifting */
 
 /* ── Clock macros (old SPL expects these, new CMSIS doesn't provide) ───── */
 #ifndef HSE_VALUE

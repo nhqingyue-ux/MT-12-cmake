@@ -49,7 +49,11 @@ void ISR_Timer3(void)
 	if(TIM_GetITStatus(TIM5, TIM_IT_Update) != RESET)
 	{
 		TIM_ClearITPendingBit(TIM5, TIM_IT_Update);
-		
+
+		// Enforce PA12 LOW (receive mode) when not transmitting
+		if(SendRs485Fg == 0)
+			USART1_RTS_L;
+
 // Fu 107/01/29
 //		Tm3Cnt = 0;	// !!!!!!!
 //		timer3_cnt++;
@@ -110,11 +114,11 @@ Package_extract(void)
 		{
 			case 0x33:  // 3 of function code represents query user-modified data(system parameters) // RD
 				//
-				// case 1 : °O¿ý¸ê®Æªø«×
+				// case 1 : ï¿½Oï¿½ï¿½ï¿½ï¿½Æªï¿½ï¿½ï¿½
 				//
 				DataLenCnt =  (rx_buffer[4]<<8) | rx_buffer[5];
 				length = DataLenCnt;
-				crc_temp = CRC16((unsigned char *)rx_buffer, 6);	// ¥]§tFUN & ID & ªø«×
+				crc_temp = CRC16((unsigned char *)rx_buffer, 6);	// ï¿½]ï¿½tFUN & ID & ï¿½ï¿½ï¿½ï¿½
 				crc_temp_Bk = rx_buffer[6] |  (rx_buffer[7]<<8);
 				//
 				if(crc_temp == crc_temp_Bk)
@@ -122,8 +126,8 @@ Package_extract(void)
 					// Set UART1_RTS 'H' for RS-232 convert RS-485 IC to send data
 					tx_buffer[0] = rx_buffer[0];  // Device address and Function code
 					tx_buffer[1] = rx_buffer[1];  // Device address and Function code
-					tx_buffer[2] = (unsigned char)length;  // Byte of length	 ¤£¥]§tFUN & ID & ªø«×
-					DataLenCnt = length;  // Byte of length	 ¤£¥]§tFUN & ID & ªø«×(address + data = 1 word)
+					tx_buffer[2] = (unsigned char)length;  // Byte of length	 ï¿½ï¿½ï¿½]ï¿½tFUN & ID & ï¿½ï¿½ï¿½ï¿½
+					DataLenCnt = length;  // Byte of length	 ï¿½ï¿½ï¿½]ï¿½tFUN & ID & ï¿½ï¿½ï¿½ï¿½(address + data = 1 word)
 					//
 					AddressSetBk = 	rx_buffer[2]<<8 | rx_buffer[3];
 					//
@@ -169,7 +173,7 @@ Package_extract(void)
 								tx_buffer[4+(2*i)] = *GetPtrCDM2(AddressSetBk2) & 0x00ff;
 							}
 						}
-						crc_temp = CRC16((unsigned char *)tx_buffer, (DataLenCnt*2)+3); 	// ¸ê®Æ + ID + FUN + ªø«×
+						crc_temp = CRC16((unsigned char *)tx_buffer, (DataLenCnt*2)+3); 	// ï¿½ï¿½ï¿½ + ID + FUN + ï¿½ï¿½ï¿½ï¿½
 						tx_buffer[(DataLenCnt*2)+3] = crc_temp & 0x00ff;
 						tx_buffer[(DataLenCnt*2)+4] = (crc_temp & 0xff00)>>8;
 						tx_buffer[(DataLenCnt*2)+5] = 0;
@@ -214,7 +218,7 @@ Package_extract(void)
 								}
 							}
 						}
-						crc_temp = CRC16((unsigned char *)tx_buffer, DataLenCnt+3); 	// ¸ê®Æ + ID + FUN + ªø«×
+						crc_temp = CRC16((unsigned char *)tx_buffer, DataLenCnt+3); 	// ï¿½ï¿½ï¿½ + ID + FUN + ï¿½ï¿½ï¿½ï¿½
 						tx_buffer[DataLenCnt+3] = crc_temp & 0x00ff;
 						tx_buffer[DataLenCnt+4] = (crc_temp & 0xff00)>>8;
 						tx_buffer[DataLenCnt+5] = 0;
@@ -226,7 +230,7 @@ Package_extract(void)
 				//
 				TimerBase3 = 0;
 //				SendRs485Fg = 1;  // 2018/02/26 by kf
-				// USART1_RTS_H; // Moved to RS485TxSub
+				USART1_RTS_H;
 				SendRs485Fg = 1;  // 2018/02/26 by kf
 				TimerBase22 = 0;
 				//MainRS485TxSub();
@@ -234,15 +238,15 @@ Package_extract(void)
 			//
 			case 0x63:
 				//
-				// case 1 : °O¿ý¸ê®Æªø«×
+				// case 1 : ï¿½Oï¿½ï¿½ï¿½ï¿½Æªï¿½ï¿½ï¿½
 				//
 				//
-				// case 2 : °O¿ý±µ¨ü¸ê®Æ
+				// case 2 : ï¿½Oï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 				//
 				//
-				// case 3 : ­pºâCRC½X
+				// case 3 : ï¿½pï¿½ï¿½CRCï¿½X
 				//
-				crc_temp = CRC16((unsigned char *)rx_buffer, 6);	// ¥]§tFUN & ID & ªø«×
+				crc_temp = CRC16((unsigned char *)rx_buffer, 6);	// ï¿½]ï¿½tFUN & ID & ï¿½ï¿½ï¿½ï¿½
 				crc_temp_Bk = rx_buffer[6] |  (rx_buffer[7]<<8);
 				//
 				if(crc_temp == crc_temp_Bk)
@@ -282,7 +286,7 @@ Package_extract(void)
 						tx_buffer[4] = (DataSetBk & 0xff00)>>8;		// data : Hi
 						tx_buffer[5] = DataSetBk & 0x00ff;			// data : Low
 						//
-						crc_temp = CRC16((unsigned char *)tx_buffer, 6); 	// ¸ê®Æ + ID + FUN + ªø«×
+						crc_temp = CRC16((unsigned char *)tx_buffer, 6); 	// ï¿½ï¿½ï¿½ + ID + FUN + ï¿½ï¿½ï¿½ï¿½
 						tx_buffer[6] = crc_temp & 0x00ff;
 						tx_buffer[7] = (crc_temp & 0xff00)>>8;
 					}
@@ -314,7 +318,7 @@ Package_extract(void)
 							tx_buffer[4] = (DataSetBk & 0xff00)>>8;		// data : Hi
 							tx_buffer[5] = DataSetBk & 0x00ff;			// data : Low
 						}
-						crc_temp = CRC16((unsigned char *)tx_buffer, 6); 	// ¸ê®Æ + ID + FUN + ªø«×
+						crc_temp = CRC16((unsigned char *)tx_buffer, 6); 	// ï¿½ï¿½ï¿½ + ID + FUN + ï¿½ï¿½ï¿½ï¿½
 						tx_buffer[6] = crc_temp & 0x00ff;
 						tx_buffer[7] = (crc_temp & 0xff00)>>8;
 					}
@@ -326,19 +330,19 @@ Package_extract(void)
 				//
 				TimerBase3 = 0;
 //				SendRs485Fg = 1;  // 2018/02/26 by kf
-				// USART1_RTS_H; // Moved to RS485TxSub
+				USART1_RTS_H;
 				SendRs485Fg = 1;  // 2018/02/26 by kf
 				TimerBase22 = 0;
 				//MainRS485TxSub();
 				break;
 			//	Fu 104/10/20
-			case 0x13:  // ¦hµ§¸ê®Æ¼g¤J// WR
+			case 0x13:  // ï¿½hï¿½ï¿½ï¿½ï¿½Æ¼gï¿½J// WR
 				//
-				// case 1 : °O¿ý¸ê®Æªø«×
+				// case 1 : ï¿½Oï¿½ï¿½ï¿½ï¿½Æªï¿½ï¿½ï¿½
 				//
 				DataLenCnt =  (rx_buffer[4]<<8) | rx_buffer[5];
 				length = DataLenCnt;
-				crc_temp = CRC16((unsigned char *)rx_buffer, 7+rx_buffer[6]);	// ¥]§tFUN & ID & ªø«×
+				crc_temp = CRC16((unsigned char *)rx_buffer, 7+rx_buffer[6]);	// ï¿½]ï¿½tFUN & ID & ï¿½ï¿½ï¿½ï¿½
 				crc_temp_Bk = rx_buffer[7+rx_buffer[6]] |  (rx_buffer[8+rx_buffer[6]]<<8);
 				//
 				if(crc_temp == crc_temp_Bk)
@@ -350,7 +354,7 @@ Package_extract(void)
 					tx_buffer[3] = rx_buffer[3];  // Statr Address2
 					tx_buffer[4] = rx_buffer[4];  // Data Len1
 					tx_buffer[5] = rx_buffer[5];  // Data Len2
-					DataLenCnt = length;  // Byte of length	 ¤£¥]§tFUN & ID & ªø«×(address + data = 1 word)
+					DataLenCnt = length;  // Byte of length	 ï¿½ï¿½ï¿½]ï¿½tFUN & ID & ï¿½ï¿½ï¿½ï¿½(address + data = 1 word)
 					//
 					AddressSetBk = 	rx_buffer[2]<<8 | rx_buffer[3];
 					//
@@ -381,7 +385,7 @@ Package_extract(void)
 							*GetPtrCDM2(AddressSetBk2) = rx_buffer[7+(2*i)]<<8 | rx_buffer[8+(2*i)];
 						}
 					}
-					crc_temp = CRC16((unsigned char *)tx_buffer, 6); 	// ¸ê®Æ + ID + FUN + Address + ªø«×
+					crc_temp = CRC16((unsigned char *)tx_buffer, 6); 	// ï¿½ï¿½ï¿½ + ID + FUN + Address + ï¿½ï¿½ï¿½ï¿½
 					tx_buffer[6] = crc_temp & 0x00ff;
 					tx_buffer[7] = (crc_temp & 0xff00)>>8;
 					tx_buffer[8] = 0;
@@ -391,7 +395,7 @@ Package_extract(void)
 				//
 				TimerBase3 = 0;
 //				SendRs485Fg = 1;  // 2018/02/26 by kf
-				// USART1_RTS_H; // Moved to RS485TxSub
+				USART1_RTS_H;
 				SendRs485Fg = 1;  // 2018/02/26 by kf
 				TimerBase22 = 0;
 				//MainRS485TxSub();
@@ -399,25 +403,25 @@ Package_extract(void)
 			//
 			case 0x30:
 				//
-				// case 1 : °O¿ý¸ê®Æªø«×
+				// case 1 : ï¿½Oï¿½ï¿½ï¿½ï¿½Æªï¿½ï¿½ï¿½
 				//
 //				ChkSumFg = SaveDataLenSub();  // 2012/09/29
 				//
-				// case 2 : °O¿ý±µ¨ü¸ê®Æ
+				// case 2 : ï¿½Oï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 				//
 //				if(ChkSumFg == 0)  // 2012/09/29
 //					ChkSumFg = RdDataSub(dev_addr, func_code);  // 2012/09/29
 //				else  // 2012/09/29
 //					LenAlarm();  // 2012/09/29
 				//
-				// case 3 : ­pºâCRC½X
+				// case 3 : ï¿½pï¿½ï¿½CRCï¿½X
 				//
 //				if(ChkSumFg == 0)  // 2012/09/29
 //				{  // 2012/09/29
 					//DataLenCnt =  (rx_buffer[1]<<8) | (rx_buffer[1]>>8);
 					DataLenCnt =  (rx_buffer[2]<<8) | rx_buffer[3];
 					length = DataLenCnt;
-					crc_temp = CRC16((unsigned char *)rx_buffer, length+4);	// ¥]§tFUN & ID & ªø«×
+					crc_temp = CRC16((unsigned char *)rx_buffer, length+4);	// ï¿½]ï¿½tFUN & ID & ï¿½ï¿½ï¿½ï¿½
 					crc_temp_Bk = rx_buffer[length+4] |  (rx_buffer[length+5]<<8);
 					//
 					if(crc_temp == crc_temp_Bk)
@@ -425,8 +429,8 @@ Package_extract(void)
 						// Set UART1_RTS 'H' for RS-232 convert RS-485 IC to send data
 						tx_buffer[0] = rx_buffer[0];  // Device address and Function code
 						tx_buffer[1] = rx_buffer[1];  // Device address and Function code
-						tx_buffer[2] = (unsigned char)length;  // Byte of length	 ¤£¥]§tFUN & ID & ªø«×
-						DataLenCnt = length;  // Byte of length	 ¤£¥]§tFUN & ID & ªø«×(address + data = 1 word)
+						tx_buffer[2] = (unsigned char)length;  // Byte of length	 ï¿½ï¿½ï¿½]ï¿½tFUN & ID & ï¿½ï¿½ï¿½ï¿½
+						DataLenCnt = length;  // Byte of length	 ï¿½ï¿½ï¿½]ï¿½tFUN & ID & ï¿½ï¿½ï¿½ï¿½(address + data = 1 word)
 						//
 						if((DataLenCnt <= 1) || (DataLenCnt >= 250))
 							break;
@@ -465,14 +469,14 @@ Package_extract(void)
 								}
 							}
 						}
-						crc_temp = CRC16((unsigned char *)tx_buffer, DataLenCnt+3); 	// ¸ê®Æ + ID + FUN + ªø«×
+						crc_temp = CRC16((unsigned char *)tx_buffer, DataLenCnt+3); 	// ï¿½ï¿½ï¿½ + ID + FUN + ï¿½ï¿½ï¿½ï¿½
 						tx_buffer[DataLenCnt+3] = crc_temp & 0x00ff;
 						tx_buffer[DataLenCnt+4] = (crc_temp & 0xff00)>>8;
 						tx_buffer[DataLenCnt+5] = 0;
 						//
 						TimerBase3 = 0;
 	//				SendRs485Fg = 1;  // 2018/02/26 by kf
-					// USART1_RTS_H; // Moved to RS485TxSub
+					USART1_RTS_H;
 					SendRs485Fg = 1;  // 2018/02/26 by kf
 					}
 					//
@@ -484,7 +488,7 @@ Package_extract(void)
 				//
 				TimerBase3 = 0;
 //				SendRs485Fg = 1;  // 2018/02/26 by kf
-				// USART1_RTS_H; // Moved to RS485TxSub
+				USART1_RTS_H;
 				SendRs485Fg = 1;  // 2018/02/26 by kf
 				TimerBase22 = 0;
 				//MainRS485TxSub();
@@ -492,24 +496,24 @@ Package_extract(void)
 			//
 			case 0x60:
 				//
-				// case 1 : °O¿ý¸ê®Æªø«×
+				// case 1 : ï¿½Oï¿½ï¿½ï¿½ï¿½Æªï¿½ï¿½ï¿½
 				//
 //				ChkSumFg = SaveDataLenSub();  // 2012/09/29
 				//
-				// case 2 : °O¿ý±µ¨ü¸ê®Æ
+				// case 2 : ï¿½Oï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 				//
 //				if(ChkSumFg == 0)  // 2012/09/29
 //					ChkSumFg = RdDataSub(dev_addr, func_code);  // 2012/09/29
 //				else  // 2012/09/29
 //					LenAlarm();  // 2012/09/29
 				//
-				// case 3 : ­pºâCRC½X
+				// case 3 : ï¿½pï¿½ï¿½CRCï¿½X
 				//
 //				if(ChkSumFg == 0)
 //				{
 					DataLenCnt =  (rx_buffer[2]<<8) | rx_buffer[3];
 					length = DataLenCnt;
-					crc_temp = CRC16((unsigned char *)rx_buffer, length+4);	// ¥]§tFUN & ID & ªø«×
+					crc_temp = CRC16((unsigned char *)rx_buffer, length+4);	// ï¿½]ï¿½tFUN & ID & ï¿½ï¿½ï¿½ï¿½
 					crc_temp_Bk = rx_buffer[length+4] |  (rx_buffer[length+5]<<8);
 					//
 					if(crc_temp == crc_temp_Bk)
@@ -517,8 +521,8 @@ Package_extract(void)
 						// Set UART1_RTS 'H' for RS-232 convert RS-485 IC to send data
 						tx_buffer[0] = rx_buffer[0];  // Device address and Function code
 						tx_buffer[1] = rx_buffer[1];  // Device address and Function code
-						tx_buffer[2] = (unsigned char)length;  // Byte of length	 ¤£¥]§tFUN & ID & ªø«×
-						DataLenCnt = length;  // Byte of length	 ¤£¥]§tFUN & ID & ªø«×(address + data = 1 word)
+						tx_buffer[2] = (unsigned char)length;  // Byte of length	 ï¿½ï¿½ï¿½]ï¿½tFUN & ID & ï¿½ï¿½ï¿½ï¿½
+						DataLenCnt = length;  // Byte of length	 ï¿½ï¿½ï¿½]ï¿½tFUN & ID & ï¿½ï¿½ï¿½ï¿½(address + data = 1 word)
 						//
 						if((DataLenCnt <= 3) || (DataLenCnt >= 250)) // 2014/09/04
 							break;
@@ -551,14 +555,14 @@ Package_extract(void)
 								tx_buffer[6+(i*4)] = DataSetBk & 0x00ff;					// data : Low
 							}
 						}	
-						crc_temp = CRC16((unsigned char *)tx_buffer, DataLenCnt+3); 	// ¸ê®Æ + ID + FUN + ªø«×
+						crc_temp = CRC16((unsigned char *)tx_buffer, DataLenCnt+3); 	// ï¿½ï¿½ï¿½ + ID + FUN + ï¿½ï¿½ï¿½ï¿½
 						tx_buffer[DataLenCnt+3] = crc_temp & 0x00ff;
 						tx_buffer[DataLenCnt+4] = (crc_temp & 0xff00)>>8;
 						tx_buffer[DataLenCnt+5] = 0;
 						//
 						TimerBase3 = 0;
 		//				SendRs485Fg = 1;  // 2018/02/26 by kf
-						// USART1_RTS_H; // Moved to RS485TxSub
+						USART1_RTS_H;
 						SendRs485Fg = 1;  // 2018/02/26 by kf
 						//
 					}  // end of if
@@ -570,7 +574,7 @@ Package_extract(void)
 				//
 				TimerBase3 = 0;
 //				SendRs485Fg = 1;  // 2018/02/26 by kf
-				// USART1_RTS_H; // Moved to RS485TxSub
+				USART1_RTS_H;
 				SendRs485Fg = 1;  // 2018/02/26 by kf
 				TimerBase22 = 0;
 				//MainRS485TxSub();
@@ -578,11 +582,11 @@ Package_extract(void)
 			// Fu 107/07/05
 			case 0xEFu :
 				//
-				// case 1 : °O¿ý¸ê®Æªø«×
+				// case 1 : ï¿½Oï¿½ï¿½ï¿½ï¿½Æªï¿½ï¿½ï¿½
 				//
 				DataLenCnt =  (rx_buffer[2]<<8) | rx_buffer[3];
 				length = DataLenCnt;
-				crc_temp = CRC16((unsigned char *)rx_buffer, 4);	// ¥]§tFUN & ID & ªø«×
+				crc_temp = CRC16((unsigned char *)rx_buffer, 4);	// ï¿½]ï¿½tFUN & ID & ï¿½ï¿½ï¿½ï¿½
 				crc_temp_Bk = rx_buffer[4] |  (rx_buffer[5]<<8);
 				//
 				if(crc_temp == crc_temp_Bk)
@@ -590,7 +594,7 @@ Package_extract(void)
 					// Set UART1_RTS 'H' for RS-232 convert RS-485 IC to send data
 					tx_buffer[0u] = rx_buffer[0u];  // Device address and Function code
 					tx_buffer[1u] = rx_buffer[1u];  // Device address and Function code
-					tx_buffer[2u] = 0x10u;  // Byte of length	 ¤£¥]§tFUN & ID & ªø«×
+					tx_buffer[2u] = 0x10u;  // Byte of length	 ï¿½ï¿½ï¿½]ï¿½tFUN & ID & ï¿½ï¿½ï¿½ï¿½
 					tx_buffer[3u] = APVer[0u];
 					tx_buffer[4u] = APVer[1u];
 					tx_buffer[5u] = APVer[2u];
@@ -610,7 +614,7 @@ Package_extract(void)
 					tx_buffer[17u] = '4';
 					tx_buffer[18u] = '0';
 					//
-					crc_temp = CRC16((unsigned char *)tx_buffer, (16u+3u)); 	// ¸ê®Æ + ID + FUN + ªø«×
+					crc_temp = CRC16((unsigned char *)tx_buffer, (16u+3u)); 	// ï¿½ï¿½ï¿½ + ID + FUN + ï¿½ï¿½ï¿½ï¿½
 					tx_buffer[16u+3u] = crc_temp & 0x00ffu;
 					tx_buffer[16u+4u] = (crc_temp & 0xff00u)>>8u;
 					tx_buffer[16u+5u] = 0;
@@ -623,7 +627,7 @@ Package_extract(void)
 				//
 				TimerBase3 = 0;
 //				SendRs485Fg = 1;  // 2018/02/26 by kf
-				// USART1_RTS_H; // Moved to RS485TxSub
+				USART1_RTS_H;
 				SendRs485Fg = 1;  // 2018/02/26 by kf
 				TimerBase22 = 0;
 				//MainRS485TxSub();
@@ -633,7 +637,7 @@ Package_extract(void)
 					DataLenCnt =  (rx_buffer[2]<<8) | rx_buffer[3];
 					//
 					length = DataLenCnt;
-					crc_temp = CRC16((unsigned char *)rx_buffer, length+4);	// ¥]§tFUN & ID & ªø«×
+					crc_temp = CRC16((unsigned char *)rx_buffer, length+4);	// ï¿½]ï¿½tFUN & ID & ï¿½ï¿½ï¿½ï¿½
 					crc_temp_Bk = rx_buffer[length+4] |  (rx_buffer[length+5]<<8);
 					//
 					if(crc_temp == crc_temp_Bk)
@@ -641,8 +645,8 @@ Package_extract(void)
 						// Set UART1_RTS 'H' for RS-232 convert RS-485 IC to send data
 						tx_buffer[0] = rx_buffer[0];  // Device address and Function code
 						tx_buffer[1] = rx_buffer[1];  // Device address and Function code
-						tx_buffer[2] = (unsigned char)length;  // Byte of length	 ¤£¥]§tFUN & ID & ªø«×
-						DataLenCnt = length;  // Byte of length	 ¤£¥]§tFUN & ID & ªø«×(address + data = 1 word)
+						tx_buffer[2] = (unsigned char)length;  // Byte of length	 ï¿½ï¿½ï¿½]ï¿½tFUN & ID & ï¿½ï¿½ï¿½ï¿½
+						DataLenCnt = length;  // Byte of length	 ï¿½ï¿½ï¿½]ï¿½tFUN & ID & ï¿½ï¿½ï¿½ï¿½(address + data = 1 word)
 						//
 						if((DataLenCnt <= 3) || (DataLenCnt >= 250)) // 2014/09/04
 						{
@@ -662,14 +666,14 @@ Package_extract(void)
 								tx_buffer[6+(i*4)] = DataSetBk & 0x00ff;					// data : Low
 							}	
 							//
-							crc_temp = CRC16((unsigned char *)tx_buffer, DataLenCnt+3); 	// ¸ê®Æ + ID + FUN + ªø«×
+							crc_temp = CRC16((unsigned char *)tx_buffer, DataLenCnt+3); 	// ï¿½ï¿½ï¿½ + ID + FUN + ï¿½ï¿½ï¿½ï¿½
 							tx_buffer[DataLenCnt+3] = crc_temp & 0x00ff;
 							tx_buffer[DataLenCnt+4] = (crc_temp & 0xff00)>>8;
 							tx_buffer[DataLenCnt+5] = 0;
 							//
 							TimerBase3 = 0;
 			//				SendRs485Fg = 1;  // 2018/02/26 by kf
-							// USART1_RTS_H; // Moved to RS485TxSub
+							USART1_RTS_H;
 							SendRs485Fg = 1;  // 2018/02/26 by kf
 							//
 						}
@@ -684,7 +688,7 @@ Package_extract(void)
 				//
 				TimerBase3 = 0;
 //				SendRs485Fg = 1;  // 2018/02/26 by kf
-				// USART1_RTS_H; // Moved to RS485TxSub
+				USART1_RTS_H;
 				SendRs485Fg = 1;  // 2018/02/26 by kf
 				TimerBase22 = 0;
 				//MainRS485TxSub();
@@ -704,7 +708,7 @@ Package_extract(void)
 				}*/
 				TimerBase3 = 0;
 //				SendRs485Fg = 1;  // 2018/02/26 by kf
-				// USART1_RTS_H; // Moved to RS485TxSub
+				USART1_RTS_H;
 				SendRs485Fg = 1;  // 2018/02/26 by kf
 				TimerBase22 = 0;
 				//MainRS485TxSub();			
