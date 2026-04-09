@@ -67,12 +67,13 @@ extern struct TempSpMathTab TempUpDnSpMathTab[TpMaxLp];	// Fu 106/05/16
 extern unsigned short BkPidPUnit[TpMaxLp];
 extern unsigned short BkPidIUnit[TpMaxLp];
 extern unsigned short BkPidDUnit[TpMaxLp];
-/* A-1: Median-of-3 + output slew limit — handles both spikes and alternating noise */
+/* A-1: Median-of-3 + asymmetric output slew limit */
 static unsigned short med_buf[TpMaxLp][3];
 static unsigned char  med_idx = 0;
-static unsigned char  med_fill = 0;  /* counts up to 3 during init */
-#define OUTPUT_SLEW_LIMIT 20  /* 2.0°C max change per 250ms cycle */
-static unsigned short slew_out[TpMaxLp];  /* previous filtered output */
+static unsigned char  med_fill = 0;
+#define SLEW_RISE_LIMIT  40  /* +4.0°C/cycle: near normal heating rate, minimal lag */
+#define SLEW_FALL_LIMIT  20  /* -2.0°C/cycle: blocks noise drops (real cooling <1°C/step) */
+static unsigned short slew_out[TpMaxLp];
 static unsigned char  slew_out_init = 0;
 extern unsigned short TwoHeatSetTm[12];
 extern unsigned short thermal_hex[12];
@@ -156,13 +157,13 @@ void TempSubScan(void)
 						if(a > b) { unsigned short t=a; a=b; b=t; }
 						TpCurrUnit = b;  /* median */
 					}
-					/* Output slew limit: clamp rate of change to ±2°C/cycle */
+					/* Asymmetric slew: rise +6°C (normal heating), fall -2°C (block noise) */
 					if(slew_out_init) {
 						short delta = (short)TpCurrUnit - (short)slew_out[i];
-						if(delta > OUTPUT_SLEW_LIMIT)
-							TpCurrUnit = slew_out[i] + OUTPUT_SLEW_LIMIT;
-						else if(delta < -OUTPUT_SLEW_LIMIT)
-							TpCurrUnit = (slew_out[i] > OUTPUT_SLEW_LIMIT) ? slew_out[i] - OUTPUT_SLEW_LIMIT : 0;
+						if(delta > SLEW_RISE_LIMIT)
+							TpCurrUnit = slew_out[i] + SLEW_RISE_LIMIT;
+						else if(delta < -SLEW_FALL_LIMIT)
+							TpCurrUnit = (slew_out[i] > SLEW_FALL_LIMIT) ? slew_out[i] - SLEW_FALL_LIMIT : 0;
 					}
 					slew_out[i] = TpCurrUnit;
 				}
