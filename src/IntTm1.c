@@ -4,10 +4,10 @@
 extern unsigned short DnApSysFg;	// Fu 107/07/05;
 extern unsigned short DelayApToBlTime;	// Fu 107/07/05
 //extern unsigned short l_temperature, r_temperature, l_r_temperature;  // 2018/12/10 by kf
-extern short l_temperature, r_temperature, l_r_temperature;  // 2018/12/10 by kf
+extern volatile short l_temperature, r_temperature, l_r_temperature;  // 2018/12/10 by kf
 extern unsigned char BURN_DETECT;
-extern unsigned short TimerBase4;
-extern unsigned short TimerBase5;
+extern volatile unsigned short TimerBase4;
+extern volatile unsigned short TimerBase5;
 extern unsigned short DateCnt;
 extern unsigned short StartCountFlag;
 // Fu 107/01/29
@@ -59,7 +59,7 @@ void ISR_Timer1(void)
 			DateCnt++; // 2015/04/20 Perpetual Calendar Timer
 		}
 		//
-		TempSubScan();	// ·Å«×-PID¹Bºâ
+		TempSubScan();	// ï¿½Å«ï¿½-PIDï¿½Bï¿½ï¿½
 			/* End for test program */
 		}
 }

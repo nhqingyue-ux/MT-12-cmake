@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include "alpum_interface_rev1.1.h"
+#include "delay.h"  // for DELAY_CYCLES
 
 #ifdef __GNUC__
   /* With GCC/RAISONANCE, small printf (option LD Linker->Libraries->Small printf
@@ -142,7 +143,7 @@ unsigned char _i2c_read(unsigned char device_addr, unsigned char sub_addr, unsig
 void _alpu_delay_ms(unsigned int k)
 {
 	int m;
-	for(m = 0; m < k*2; m++);
+	DELAY_CYCLES(k*2);
 }
 
 #ifdef BYPASS

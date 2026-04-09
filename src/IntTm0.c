@@ -6,10 +6,9 @@ extern unsigned char rx_buffer[RX_BUFFER_LEN];  // 2012/10/11
 extern unsigned char tx_buffer[TX_BUFFER_LEN];  // 2012/10/11
 extern unsigned short crc_temp;  // 2012/10/11
 extern unsigned short id;  // 2012/10/11
-extern unsigned short SendRs485Fg;  // 2012/10/11
+extern volatile unsigned short SendRs485Fg;  // 2012/10/11
 extern unsigned short *pA20001;  // 2012/10/11
-extern unsigned short  TimerBase3;  // 2012/10/11
-extern unsigned short TimerBase22;  // 2012/10/11
+extern volatile unsigned short TimerBase3;  // 2012/10/11
 // Fu 107/01/29
 //extern unsigned long Tm1Cnt;
 //extern unsigned long Tm2Cnt;
@@ -37,7 +36,7 @@ unsigned short Output100Fg2=0;
 extern unsigned short Output100Fg;
 extern unsigned short Output100Pr[12];
 //extern unsigned short thermal_couple[12];
-extern short thermal_couple[12];
+extern volatile short thermal_couple[12];
 extern unsigned short Bk_thermal_couple[12];
 extern unsigned char BURN_DETECT;
 extern unsigned short TemperatureOutput[12];
@@ -118,7 +117,7 @@ void ISR_Timer0(void)
 		//
 		// For WatchDog Count
 		WD_TRIG_L;
-		for(delay = 0; delay < 10; delay++);
+		DELAY_CYCLES(10);
 		WD_TRIG_H;
 	}
 }

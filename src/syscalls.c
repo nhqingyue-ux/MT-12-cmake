@@ -35,7 +35,16 @@ void *_sbrk(intptr_t incr)
 }
 
 /* ─── minimal stdio stubs ─────────────────────────────────────────────────── */
-int _write(int fd, const char *buf, int len) { (void)fd; (void)buf; return len; }
+/* Forward printf output to UART4 (PA0 TX, 460800 baud) */
+#include "stm32f4xx_usart.h"
+int _write(int fd, const char *buf, int len) {
+    (void)fd;
+    for (int i = 0; i < len; i++) {
+        while (USART_GetFlagStatus(UART4, USART_FLAG_TXE) == RESET);
+        USART_SendData(UART4, (uint8_t)buf[i]);
+    }
+    return len;
+}
 int _read(int fd, char *buf, int len)        { (void)fd; (void)buf; (void)len; return -1; }
 int _close(int fd)                           { (void)fd; return -1; }
 int _fstat(int fd, struct stat *st)          { (void)fd; if(st) st->st_mode = S_IFCHR; return 0; }

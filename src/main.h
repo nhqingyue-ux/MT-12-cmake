@@ -55,7 +55,7 @@ float PwmCounterUnit=32767;	// Fu 106/07/19
 unsigned short CntSw;
 unsigned short CntTPCnt;
 unsigned short CntTPSec;
-unsigned short IcCh, OldIcCh,IcChFg;
+volatile unsigned short IcCh, OldIcCh,IcChFg;
 unsigned short ChStsTst;
 unsigned short OldKAndJSel;
 unsigned short DataTest, DataTest1, DataTest2;
@@ -67,17 +67,17 @@ unsigned short RelayTmMd[TpMaxLp];
 unsigned short TwoUpTm[TpMaxLp];
 unsigned short OldTpControl[TpMaxLp];
 unsigned short RsTxRxSts;
-unsigned short Int1Sts;
+volatile unsigned short Int1Sts;
 unsigned short DataSet500W;
-unsigned short SendRs485Fg;
+volatile unsigned short SendRs485Fg;
 unsigned short TPopen;
-unsigned short TimerBase1;
-unsigned short TimerBase2;
-unsigned short TimerBase3;
-unsigned short TimerBase4;
-unsigned short TimerBase5;
-unsigned short TimerBaseled;
-unsigned short StepCnt;
+volatile unsigned short TimerBase1;
+volatile unsigned short TimerBase2;
+volatile unsigned short TimerBase3;
+volatile unsigned short TimerBase4;
+volatile unsigned short TimerBase5;
+volatile unsigned short TimerBaseled;
+volatile unsigned short StepCnt;
 unsigned short StepCnt1;
 unsigned short StepCnt2;
 unsigned short StepCnt3;
@@ -180,10 +180,10 @@ struct TpPID_DATA TpPIDdata[12], tempData[12];
 //unsigned short Nthermal_couple[3][4];
 unsigned short Nthermal_hex[3][4];
 //unsigned short thermal_couple[12];
-short thermal_couple[12];
+volatile short thermal_couple[12];
 unsigned short Bk_thermal_couple[12];
 //unsigned short l_temperature, r_temperature, l_r_temperature;  // 2018/12/10 by kf
-short l_temperature, r_temperature, l_r_temperature;  // 2018/12/10 by kf
+volatile short l_temperature, r_temperature, l_r_temperature;  // 2018/12/10 by kf
 unsigned short thermal_hex[12];
 //
 unsigned short heat = 0xFFFF;
@@ -221,16 +221,16 @@ unsigned char Nreg[4][3] = {{0x40, 0x0, 0x81},	// CH1 COMMAND
 						   {0x40, 0x0, 0xB7}};	// CH4 COMMAND
 #endif
 //
-unsigned char ch_index= 0, reg_index = 0, bit_shift = 0x80;
-unsigned char conv_round = 0;  // record how much conversion have been done per round
+volatile unsigned char ch_index= 0, reg_index = 0, bit_shift = 0x80;
+volatile unsigned char conv_round = 0;  // record how much conversion have been done per round
 unsigned char ch_burnout = 0;
 unsigned short open_rec = 0;
 
-	/* Table of CRC values for high¡Vorder byte */
+	/* Table of CRC values for highï¿½Vorder byte */
 
 //  for other use
-unsigned int T_DO[4];
-unsigned short thermal[4];
+volatile unsigned int T_DO[4];
+volatile unsigned short thermal[4];
 unsigned short thermal2[3];
 unsigned short ch_test = 0;
 
@@ -268,7 +268,7 @@ static unsigned char auchCRCHi[] = {
 0x00, 0xC1, 0x81, 0x40, 0x01, 0xC0, 0x80, 0x41, 0x01, 0xC0, 0x80, 0x41, 0x00, 0xC1, 0x81,
 0x40
 }; 
-	/* Table of CRC values for low¡Vorder byte */
+	/* Table of CRC values for lowï¿½Vorder byte */
 static char auchCRCLo[] = {
 0x00, 0xC0, 0xC1, 0x01, 0xC3, 0x03, 0x02, 0xC2, 0xC6, 0x06, 0x07, 0xC7, 0x05, 0xC5, 0xC4,
 0x04, 0xCC, 0x0C, 0x0D, 0xCD, 0x0F, 0xCF, 0xCE, 0x0E, 0x0A, 0xCA, 0xCB, 0x0B, 0xC9, 0x09,
@@ -309,7 +309,7 @@ unsigned char BURN_DETECT = 0;
 unsigned long error_temperature = 0;
 unsigned long Bk_error_temperature = 0;
 unsigned short TpCutFg;
-unsigned short IcCh, OldIcCh;
+volatile unsigned short IcCh, OldIcCh;
 unsigned short OldKAndJSel;
 unsigned short TpDownCnt[TpMaxLp];
 unsigned short LastOutUnit1[TpMaxLp];
@@ -319,18 +319,18 @@ unsigned short RelayTmMd[TpMaxLp];
 unsigned short TwoUpTm[TpMaxLp];
 unsigned short OldTpControl[TpMaxLp];
 unsigned short RsTxRxSts;
-unsigned short Int1Sts;
+volatile unsigned short Int1Sts;
 unsigned short DataSet500W;
-unsigned short SendRs485Fg;
+volatile unsigned short SendRs485Fg;
 unsigned short TPopen;
-unsigned short TimerBase1;
-unsigned short TimerBase2;
+volatile unsigned short TimerBase1;
+volatile unsigned short TimerBase2;
 unsigned short TimerBase22;
-unsigned short TimerBase3;
-unsigned short TimerBase4;
-unsigned short TimerBase5;
-unsigned short TimerBaseled;
-unsigned short StepCnt;
+volatile unsigned short TimerBase3;
+volatile unsigned short TimerBase4;
+volatile unsigned short TimerBase5;
+volatile unsigned short TimerBaseled;
+volatile unsigned short StepCnt;
 unsigned short StepCnt1;
 unsigned short StepCnt2;
 unsigned short StepCnt3;
@@ -434,14 +434,14 @@ struct TpPID_DATA TpPIDdata[12], tempData[12];
 //**************************************************************************
 //  data storage for transmission between CU_3505(A8) and CU_ADA(M3)
 //unsigned short Nthermal_couple[3][4];  // 2017/06/09 by kf
-short Nthermal_couple[3][4];  // 2017/06/09 by kf
-unsigned short thermal_PosAndNeg[3][4];  // Fu 2018/12/10 : °O¿ý¥¿­t·Å«×ª¬ºA
+volatile short Nthermal_couple[3][4];  // 2017/06/09 by kf
+volatile unsigned short thermal_PosAndNeg[3][4];  // Fu 2018/12/10 : ï¿½Oï¿½ï¿½ï¿½ï¿½ï¿½tï¿½Å«×ªï¿½ï¿½A
 unsigned short Nthermal_hex[3][4];
 //unsigned short thermal_couple[12];
-short thermal_couple[12];
+volatile short thermal_couple[12];
 unsigned short Bk_thermal_couple[12];
 //unsigned short l_temperature, r_temperature, l_r_temperature;  // 2018/12/10 by kf
-short l_temperature, r_temperature, l_r_temperature;  // 2018/12/10 by kf
+volatile short l_temperature, r_temperature, l_r_temperature;  // 2018/12/10 by kf
 unsigned short thermal_hex[12];
 unsigned short TpCutFgHex[TpMaxLp];
 unsigned short TpErrBuf[TpMaxLp];
@@ -486,16 +486,16 @@ unsigned short ChIdx[4]={0x01,0x04,0x10,0x40};
 
 
 //
-unsigned char ch_index= 0, reg_index = 0, bit_shift = 0x80;
-unsigned char conv_round = 0;  // record how much conversion have been done per round
+volatile unsigned char ch_index= 0, reg_index = 0, bit_shift = 0x80;
+volatile unsigned char conv_round = 0;  // record how much conversion have been done per round
 unsigned char ch_burnout = 0;
 unsigned short open_rec = 0;
 
-	/* Table of CRC values for high¡Vorder byte */
+	/* Table of CRC values for highï¿½Vorder byte */
 
 //  for other use
-unsigned int T_DO[4];
-unsigned short thermal[4];
+volatile unsigned int T_DO[4];
+volatile unsigned short thermal[4];
 unsigned short thermal2[3];
 unsigned short ch_test[3] , ch_test2[3];
 
@@ -533,7 +533,7 @@ static unsigned char auchCRCHi[] = {
 0x00, 0xC1, 0x81, 0x40, 0x01, 0xC0, 0x80, 0x41, 0x01, 0xC0, 0x80, 0x41, 0x00, 0xC1, 0x81,
 0x40
 }; 
-	/* Table of CRC values for low¡Vorder byte */
+	/* Table of CRC values for lowï¿½Vorder byte */
 static char auchCRCLo[] = {
 0x00, 0xC0, 0xC1, 0x01, 0xC3, 0x03, 0x02, 0xC2, 0xC6, 0x06, 0x07, 0xC7, 0x05, 0xC5, 0xC4,
 0x04, 0xCC, 0x0C, 0x0D, 0xCD, 0x0F, 0xCF, 0xCE, 0x0E, 0x0A, 0xCA, 0xCB, 0x0B, 0xC9, 0x09,

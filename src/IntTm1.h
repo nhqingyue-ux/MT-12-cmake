@@ -14,13 +14,13 @@ extern void TempHWSave(void);
 //	DATA						    
 //					   
 //////////////////////////
-extern unsigned char ch_index;		
-extern unsigned short Int1Sts;
+extern volatile unsigned char ch_index;
+extern volatile unsigned short Int1Sts;
 extern unsigned short heat;
-extern unsigned short TimerBase1;
-extern unsigned short TimerBase2;
-extern unsigned short TimerBase3;
-extern unsigned short StepCnt;
+extern volatile unsigned short TimerBase1;
+extern volatile unsigned short TimerBase2;
+extern volatile unsigned short TimerBase3;
+extern volatile unsigned short StepCnt;
 //
 extern unsigned short TestCnt;
 extern unsigned short EnetServerOK;

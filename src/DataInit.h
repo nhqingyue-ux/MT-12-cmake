@@ -28,9 +28,9 @@ extern void I2C2_MUX_unlock(void);
 extern unsigned short OldKAndJSel;
 extern unsigned short DataSet500W;
 extern unsigned short heat;
-extern unsigned short TimerBase1;
-extern unsigned short TimerBase2;
-extern unsigned short StepCnt;	  
+extern volatile unsigned short TimerBase1;
+extern volatile unsigned short TimerBase2;
+extern volatile unsigned short StepCnt;	  
 //
 extern unsigned short TestCnt;
 extern unsigned short EnetServerOK;
@@ -153,7 +153,7 @@ const unsigned short EEPROMInitialValue[499] = {
 
 //extern unsigned short thermal_couple[12];
 //extern unsigned short l_temperature, r_temperature;  // 2018/12/10 by kf
-extern short l_temperature, r_temperature;  // 2018/12/10 by kf
+extern volatile short l_temperature, r_temperature;  // 2018/12/10 by kf
 extern unsigned char error_temperature;  // 2018/12/10 by kf
 extern unsigned short thermal_hex[12];
 

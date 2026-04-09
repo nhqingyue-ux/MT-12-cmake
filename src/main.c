@@ -30,6 +30,7 @@ unsigned short DateCnt=0u;
 unsigned short StartCountFlag=0u;
 unsigned char eeprom_access_ret_val = 0u;  // 2018/02/06 by kf
 unsigned short ADErrorFlag=0u;
+volatile unsigned char i2c2_fail_step = 0;  /* debug: which step of Right_temperature_IC failed */
 unsigned short RelayTm[12u];
 unsigned short ThermostatTm[12u];
 unsigned short ActThermostatTm[12u];
@@ -77,6 +78,18 @@ extern unsigned char write_EEPROM(unsigned long, unsigned short*, unsigned short
 extern unsigned char _alpu_rand(void);
 extern void _ALPU_action(void);
 
+// RS485 RX state (for init cleanup)
+extern unsigned short buffer_index;
+extern unsigned char package_in_flag;
+extern unsigned short TimerBase_package_cut;
+extern unsigned short FirstRsTxRxStsOKFlag;
+extern unsigned short TpClLpFg3;
+extern unsigned short ThermostatFun;
+extern unsigned short RealTpOutPwm;
+extern unsigned short BkPidPUnit[12];
+
+#include "dbg_uart.h"
+
 /* Private function prototypes -----------------------------------------------*/
 
 #ifdef __GNUC__
@@ -89,11 +102,76 @@ extern void _ALPU_action(void);
 
 /* Private functions ---------------------------------------------------------*/
 
+short Right_temperature_IC(void);
+short Left_temperature_IC(void);
 
-//unsigned short Right_temperature_IC(void);  // 2018/12/10 by kf
-short Right_temperature_IC(void);  // 2018/12/10 by kf
-//unsigned short Left_temperature_IC(void);  // 2018/12/10 by kf
-short Left_temperature_IC(void);  // 2018/12/10 by kf
+/*
+ * I2C2 bus recovery — STM32F4 errata workaround.
+ * Bit-bang 9 SCL pulses + STOP to release stuck slave, then re-init peripheral.
+ */
+static void I2C2_BusRecovery(void)
+{
+	GPIO_InitTypeDef gpio;
+	unsigned char i;
+
+	I2C_Cmd(I2C2, DISABLE);
+	RCC_APB1PeriphClockCmd(RCC_APB1Periph_I2C2, DISABLE);
+	DELAY_CYCLES(500);
+
+	gpio.GPIO_Pin   = GPIO_Pin_10 | GPIO_Pin_11;
+	gpio.GPIO_Mode  = GPIO_Mode_OUT;
+	gpio.GPIO_OType = GPIO_OType_OD;
+	gpio.GPIO_PuPd  = GPIO_PuPd_UP;
+	gpio.GPIO_Speed = GPIO_Speed_2MHz;
+	GPIO_Init(GPIOB, &gpio);
+
+	GPIO_SetBits(GPIOB, GPIO_Pin_10);
+	GPIO_SetBits(GPIOB, GPIO_Pin_11);
+	DELAY_CYCLES(1000);
+
+	for(i = 0; i < 9; i++)
+	{
+		GPIO_ResetBits(GPIOB, GPIO_Pin_10);
+		DELAY_CYCLES(500);
+		GPIO_SetBits(GPIOB, GPIO_Pin_10);
+		DELAY_CYCLES(500);
+	}
+
+	GPIO_ResetBits(GPIOB, GPIO_Pin_11);  /* SDA LOW */
+	DELAY_CYCLES(500);
+	GPIO_SetBits(GPIOB, GPIO_Pin_10);    /* SCL HIGH */
+	DELAY_CYCLES(500);
+	GPIO_SetBits(GPIOB, GPIO_Pin_11);    /* SDA HIGH → STOP */
+	DELAY_CYCLES(500);
+
+	gpio.GPIO_Pin   = GPIO_Pin_10 | GPIO_Pin_11;
+	gpio.GPIO_Mode  = GPIO_Mode_AF;
+	gpio.GPIO_OType = GPIO_OType_OD;
+	gpio.GPIO_PuPd  = GPIO_PuPd_UP;
+	gpio.GPIO_Speed = GPIO_Speed_50MHz;
+	GPIO_Init(GPIOB, &gpio);
+	GPIO_PinAFConfig(GPIOB, GPIO_PinSource10, GPIO_AF_I2C2);
+	GPIO_PinAFConfig(GPIOB, GPIO_PinSource11, GPIO_AF_I2C2);
+
+	RCC_APB1PeriphClockCmd(RCC_APB1Periph_I2C2, ENABLE);
+	DELAY_CYCLES(200);
+	I2C_SoftwareResetCmd(I2C2, ENABLE);
+	DELAY_CYCLES(500);
+	I2C_SoftwareResetCmd(I2C2, DISABLE);
+	DELAY_CYCLES(200);
+
+	{
+		I2C_InitTypeDef I2C_InitStructure;
+		I2C_InitStructure.I2C_Mode = I2C_Mode_I2C;
+		I2C_InitStructure.I2C_DutyCycle = I2C_DutyCycle_16_9;
+		I2C_InitStructure.I2C_OwnAddress1 = 0x01;
+		I2C_InitStructure.I2C_Ack = I2C_Ack_Enable;
+		I2C_InitStructure.I2C_AcknowledgedAddress = I2C_AcknowledgedAddress_7bit;
+		I2C_InitStructure.I2C_ClockSpeed = 400000;
+		I2C_Init(I2C2, &I2C_InitStructure);
+		I2C_Cmd(I2C2, ENABLE);
+	}
+}
 //
 // Fu 107/01/29
 //unsigned long Tm1Cnt=0;
@@ -128,41 +206,159 @@ int main(void)
 	//
 	init();
 	//
+	/* I2C2 bus recovery after init() — init calls Right_temperature_IC()
+	   which may leave I2C2 BUSY if the right TMP112 is absent or NACKs */
+	if(I2C2->SR2 & 0x0002) {
+		I2C2_BusRecovery();
+	}
+	/* Probe I2C2 address 0x49 (right TMP112) to check if device is present */
+	{
+		unsigned short tc = 0;
+		I2C_GenerateSTART(I2C2, ENABLE);
+		while(!I2C_CheckEvent(I2C2, I2C_EVENT_MASTER_MODE_SELECT)) {
+			if(++tc > 5000) break;
+		}
+		I2C_Send7bitAddress(I2C2, (R_TMP112_ADDRESS << 1), I2C_Direction_Transmitter);
+		tc = 0;
+		while(!(I2C_GetFlagStatus(I2C2, I2C_FLAG_TXE)) && !(I2C_GetFlagStatus(I2C2, I2C_FLAG_AF))) {
+			if(++tc > 5000) break;
+		}
+		if(I2C_GetFlagStatus(I2C2, I2C_FLAG_AF)) {
+			I2C_ClearFlag(I2C2, I2C_FLAG_AF);
+			dbg_puts("[I2C2] TMP112@0x49 NOT found (NACK)\r\n");
+		} else {
+			dbg_puts("[I2C2] TMP112@0x49 ACK OK!\r\n");
+		}
+		I2C_GenerateSTOP(I2C2, ENABLE);
+		DELAY_CYCLES(5000);
+		if(I2C2->SR2 & 0x0002) I2C2_BusRecovery();
+	}
+	//
+	/* Print RCC clock config for diagnosis */
+	{
+		RCC_ClocksTypeDef clk;
+		RCC_GetClocksFreq(&clk);
+		dbg_puts("\r\n[CLK] SYSCLK="); dbg_putu(clk.SYSCLK_Frequency);
+		dbg_puts(" HCLK="); dbg_putu(clk.HCLK_Frequency);
+		dbg_puts(" PCLK1="); dbg_putu(clk.PCLK1_Frequency);
+		dbg_puts(" PCLK2="); dbg_putu(clk.PCLK2_Frequency);
+		dbg_puts("\r\n PLLM="); dbg_putu(RCC->PLLCFGR & 0x3F);
+		dbg_puts(" PLLN="); dbg_putu((RCC->PLLCFGR >> 6) & 0x1FF);
+		dbg_puts(" PLLP="); dbg_putu(((RCC->PLLCFGR >> 16) & 0x3) * 2 + 2);
+		dbg_puts(" PLLSRC="); dbg_putu((RCC->PLLCFGR >> 22) & 1);
+		dbg_puts(((RCC->PLLCFGR >> 22) & 1) ? " (HSE)\r\n" : " (HSI)\r\n");
+	}
+	dbg_puts("[I2C2] SR1="); dbg_putu(I2C2->SR1);
+	dbg_puts(" SR2="); dbg_putu(I2C2->SR2);
+	dbg_puts(" CR1="); dbg_putu(I2C2->CR1);
+	dbg_puts(" BUSY="); dbg_putu((I2C2->SR2 >> 1) & 1);
+	dbg_puts("\r\n");
+	dbg_puts("[INIT] l="); dbg_puti(l_temperature);
+	dbg_puts(" r="); dbg_puti(r_temperature);
+	dbg_puts(" lr="); dbg_puti(l_r_temperature);
+	dbg_puts(" err="); dbg_putu((unsigned)error_temperature);
+	dbg_puts("\r\n");
+	/* Ensure I2C2 BUSY is clear before CDMInit reads EEPROM via I2C2 */
+	if(I2C2->SR2 & 0x0002) {
+		I2C2_BusRecovery();
+		dbg_puts("[I2C2] Pre-CDMInit recovery, BUSY=");
+		dbg_putu((I2C2->SR2 >> 1) & 1);
+		dbg_puts("\r\n");
+	}
 	CDMInit();
 	//
+	/* Print EEPROM read result and PID parameters */
+	dbg_puts("[EEPROM] ret="); dbg_putu(eeprom_access_ret_val);
+	dbg_puts(" P0="); dbg_putu(*(tempData[0].PIDp));
+	dbg_puts(" I0="); dbg_putu(*(tempData[0].PIDi));
+	dbg_puts(" D0="); dbg_putu(*(tempData[0].PIDd));
+	dbg_puts(" Set0="); dbg_putu(*(tempData[0].HeatSet));
+	dbg_puts("\r\n");
+	//
 	while(!I2C1_MUX_lock());
-	TempIintData();				   
+	TempIintData();
 	I2C1_MUX_unlock();
 	//
 	BaudSet(); // 2015/08/12
-	//	
-	// wait a unsigned int 570 ms delay (one time only at power up)
-	for(wait = 0; wait < 384; wait++)
-       	for(wait1 = 0; wait1 < 50000; wait1++);
 	//
+	// wait ~570 ms delay (one time only at power up)
+	for(wait = 0; wait < 384; wait++)
+		DELAY_CYCLES(50000);
+	//
+	dbg_puts("[PRE-BK] CDM20201="); dbg_putu(*GetPtrCDM2(20201));
+	dbg_puts(" PIDp_ptr="); dbg_putu(*(tempData[0].PIDp));
+	dbg_puts(" pA="); dbg_putu((unsigned)(pA20001));
+	dbg_puts(" PIDp="); dbg_putu((unsigned)(tempData[0].PIDp));
+	dbg_puts(" diff="); dbg_putu((unsigned)(tempData[0].PIDp - pA20001));
+	dbg_puts("\r\n");
 	for(i=0; i<12; i++)
 	{
 		BkPidPUnit[i] = *(tempData[i].PIDp);
 		BkPidIUnit[i] = *(tempData[i].PIDi);
 		BkPidDUnit[i] = *(tempData[i].PIDd);
 	}
+	dbg_puts("[PID] P0="); dbg_putu(BkPidPUnit[0]);
+	dbg_puts(" I0="); dbg_putu(BkPidIUnit[0]);
+	dbg_puts(" D0="); dbg_putu(BkPidDUnit[0]);
+	dbg_puts("\r\n");
 	//
 	*GetPtrCDM2(20559u) = 0u;	// Fu 107/07/05
 	// Fu 107/07/13
 	APVer[2] = *(unsigned char *)0x2001FFF8u;
 	APVer[3] = *(unsigned char *)0x2001FFF9u;
 	//
-	// Fix: During init, TIM5 ISR may process HMI queries and set PA12 HIGH (TX mode).
-	// Since RS485TxSub() only runs in the main loop, PA12 never returns to LOW.
-	// Force PA12 LOW (receive mode) before entering main loop.
+	// Fix: Clear RS485 state before main loop.
+	// During init, TIM5 ISR processes HMI requests → sets RTS HIGH + SendRs485Fg=1.
+	// Main loop hasn't started → RS485TxSub never runs → RTS stuck HIGH.
+	// Also flush stale USART RX data to prevent parsing garbage.
+	USART_ITConfig(USART1, USART_IT_RXNE, DISABLE);
+	while(USART_GetFlagStatus(USART1, USART_FLAG_RXNE) == SET)
+		USART_ReceiveData(USART1);
+	if(USART_GetFlagStatus(USART1, USART_FLAG_ORE) == SET)
+		USART_ReceiveData(USART1);
+	buffer_index = 0;
+	package_in_flag = 0;
+	TimerBase_package_cut = 0;
 	USART1_RTS_L;
 	SendRs485Fg = 0;
+	USART_ITConfig(USART1, USART_IT_RXNE, ENABLE);
 	//
+	/* Debug: print ADS1248 diagnostics */
+	dbg_puts("\r\n[BOOT] UART4 OK\r\n");
 	while (1u)
 	{
 // Fu 107/01/29
 //		MainCnt = 0;	// !!!!!!!
 //		MainErrCnt = 1;
+		//
+		/* --- ADS1248 / PV debug log (every ~2000 main-loop iterations) --- */
+		{
+			static unsigned int dbg_iter = 0;
+			if(++dbg_iter >= 2000) {
+				dbg_iter = 0;
+				dbg_puts("[D] Amb="); dbg_puti(l_r_temperature);
+				dbg_puts(" R="); dbg_puti(r_temperature);
+				dbg_puts(" L="); dbg_puti(l_temperature);
+				dbg_puts(" i2c2f="); dbg_putu(i2c2_fail_step);
+				dbg_puts("\r\n");
+				/* Heating conditions */
+				dbg_puts("[H] HeatCtrlMd="); dbg_putu(*(tempData[0].HeatCtrlMd));
+				dbg_puts(" RsTxRxSts="); dbg_putu(RsTxRxSts);
+				dbg_puts(" ADE="); dbg_putu(ADErrorFlag);
+				dbg_puts(" HeatErrIR="); dbg_putu(tempData[0].HeatErrIR);
+				dbg_puts(" TpClLpFg3="); dbg_putu(TpClLpFg3);
+				dbg_puts(" ThrmFun="); dbg_putu(ThermostatFun);
+				dbg_puts("\r\n RealPwm="); dbg_putu(RealTpOutPwm);
+				dbg_puts(" heat="); dbg_putu(heat);
+				dbg_puts(" P0="); dbg_putu(BkPidPUnit[0]);
+				dbg_puts(" Set0="); dbg_putu(*(tempData[0].HeatSet));
+				dbg_puts(" Ctrl0="); dbg_putu(*(tempData[0].TpControl));
+				dbg_puts(" Disp0="); dbg_putu(*(tempData[0].TpDisplay));
+				dbg_puts(" DnAp="); dbg_putu(DnApSysFg);
+				dbg_puts(" 1st="); dbg_putu(FirstRsTxRxStsOKFlag);
+				dbg_puts("\r\n");
+			}
+		}
 		//
 		if(Int1Sts)
 			LED_GRN_H;
@@ -644,10 +840,10 @@ Vbias_Set(unsigned short cs, unsigned short vbias_reg)
 	T_SCLK_L;
 	T_DIN_L;
 	// Delay more than 1715 ns
-	for(wait = 0; wait < 40; wait++);
+	DELAY_CYCLES(40);
 	T_CS2_H;
 	T_CS13_H;
-	for(wait = 0; wait < 3;wait++);
+	DELAY_CYCLES(3);
 }
 
 ///////////////////////////////////////////////////////////////////////////
@@ -676,10 +872,10 @@ Sel_Channel(unsigned char cs, unsigned char mux_reg)
 	T_SCLK_L;
 	T_DIN_L;
 	// Delay more than 1715 ns
-	for(wait = 0; wait < 40; wait++);
+	DELAY_CYCLES(40);
 	T_CS2_H;
 	T_CS13_H;
-	for(wait = 0; wait < 3;wait++);
+	DELAY_CYCLES(3);
 }
 
 ///////////////////////////////////////////////////////////////////////////
@@ -708,10 +904,10 @@ PGA_DOR_Set(unsigned char cs, unsigned char sys0_reg)
 	T_SCLK_L;
 	T_DIN_L;
 	// Delay more than 1715 ns
-	for(wait = 0; wait < 40; wait++);
+	DELAY_CYCLES(40);
 	T_CS2_H;
 	T_CS13_H;
-	for(wait = 0; wait < 3;wait++);
+	DELAY_CYCLES(3);
 }
 
 ///////////////////////////////////////////////////////////////////////////
@@ -741,21 +937,21 @@ Read_Single_AD(unsigned char cs, unsigned char mux_channel)
 		bit_shift = 0x80;
 		do
 		{
-			T_SCLK_H;
+				T_SCLK_H;
 			if(reg[mux_channel][reg_index] & bit_shift)
 				T_DIN_H;
 			else
 				T_DIN_L;
-			for(wait = 0; wait < 1; wait++);
+			DELAY_CYCLES(20);  // ADS1248 DOUT output delay (t_dod) ~100ns after SCLK rise
 			T_DO[0] = ((T_DO[0] << 1) | (GPIO_ReadInputDataBit(GPIOA, GPIO_Pin_6)? 0x1 : 0x0));
 			T_DO[1] = ((T_DO[1] << 1) | (GPIO_ReadInputDataBit(GPIOB, GPIO_Pin_14)? 0x1 : 0x0));
 			T_DO[2] = ((T_DO[2] << 1) | (GPIO_ReadInputDataBit(GPIOC, GPIO_Pin_11)? 0x1 : 0x0));
 			T_SCLK_L;
 			bit_shift = bit_shift >> 1;
 			if(bit_shift != 0x00)
-				for(wait = 0; wait < 15; wait++);
+				DELAY_CYCLES(15);
 			else
-				for(wait = 0; wait < 2; wait++);
+				DELAY_CYCLES(2);
 		}while(bit_shift != 0x00);
 	}
 	//
@@ -777,7 +973,7 @@ Read_Single_AD(unsigned char cs, unsigned char mux_channel)
 	T_SCLK_L;
 	T_DIN_L;
 	// Delay more than 1715 ns
-	for(wait = 0; wait < 40; wait++);
+	DELAY_CYCLES(40);
 	T_CS2_H;
 	T_CS13_H;
 	//
@@ -919,7 +1115,7 @@ unsigned short AD2Temp(unsigned short chip_no, unsigned short channel_no)
 			TempPosAndNegFg = 1;
 			if((thermal[chip_no] & 0x8000) == 0x8000)
 			{
-				BkTempHwUnit = (~(thermal[chip_no])) + 10;
+				BkTempHwUnit = (~(thermal[chip_no])) + 1;  // 2's complement
 			}
 			else
 			{
@@ -1054,14 +1250,15 @@ Right_temperature_IC(void)
 	short r_value;
 	unsigned short r_fraction;
 	unsigned short time_cnt = 0;
-	
+
 	time_cnt = 0;
 	while(I2C_GetFlagStatus(I2C2, I2C_FLAG_BUSY))
 	{
 		time_cnt++;
-//		if(time_cnt > 63000)  // 2017/09/25 by kf
-		if(time_cnt > 160)  // 2017/09/25 by kf
+		if(time_cnt > 1600)
 		{
+			i2c2_fail_step = 1;
+			I2C2_BusRecovery();  /* Try to unstick the bus for next call */
 			error_temperature = error_temperature | 0x0F;
 			return r_temperature;
 		}
@@ -1074,9 +1271,9 @@ Right_temperature_IC(void)
 	while(!I2C_CheckEvent(I2C2, I2C_EVENT_MASTER_MODE_SELECT))
 	{
 		time_cnt++;
-//		if(time_cnt > 63000)  // 2017/09/25 by kf
-		if(time_cnt > 5)  // 2017/09/25 by kf
+		if(time_cnt > 50)
 		{
+			i2c2_fail_step = 2;
 			error_temperature = error_temperature | 0x0F;
 			return r_temperature;
 		}
@@ -1088,9 +1285,9 @@ Right_temperature_IC(void)
 	while(!(I2C_GetFlagStatus(I2C2, I2C_FLAG_TXE)) && !(I2C_GetFlagStatus(I2C2, I2C_FLAG_AF)))
 	{
 		time_cnt++;
-//		if(time_cnt > 63000)  // 2017/09/25 by kf
-		if(time_cnt > 90)  // 2017/09/25 by kf
+		if(time_cnt > 900)
 		{
+			i2c2_fail_step = 3;
 			error_temperature = error_temperature | 0x0F;
 			return r_temperature;
 		}
@@ -1099,57 +1296,56 @@ Right_temperature_IC(void)
 	{
 			I2C_ClearFlag(I2C2, I2C_FLAG_AF);
 			time_cnt++;
-//			if(time_cnt > NACK_CHECK_MAX)  // 2017/09/25 by kf
-			if(time_cnt > 2)  // 2017/09/25 by kf
+			if(time_cnt > 20)
 			{
+				i2c2_fail_step = 4;
 				I2C_GenerateSTOP(I2C2, ENABLE);
+				DELAY_CYCLES(5000);
+				if(I2C2->SR2 & 0x0002) I2C2_BusRecovery();
 				error_temperature = error_temperature | 0x0F;
 				return r_temperature;
 			}
-			//
-			// Re-send start and device address for acknowledge polling
-			//
 			I2C_GenerateSTART(I2C2, ENABLE);
 			while(!I2C_CheckEvent(I2C2, I2C_EVENT_MASTER_MODE_SELECT))
 			{
 				time_cnt++;
-//				if(time_cnt > 63000)  // 2017/09/25 by kf
-				if(time_cnt > 2)  // 2017/09/25 by kf
+				if(time_cnt > 20)
 				{
+					i2c2_fail_step = 5;
 					error_temperature = error_temperature | 0x0F;
 					return r_temperature;
 				}
 			}
 
-			I2C_Send7bitAddress(I2C2, (R_TMP112_ADDRESS << 1), I2C_Direction_Transmitter);  // Set B0 bit of Control Byte as '0'
+			I2C_Send7bitAddress(I2C2, (R_TMP112_ADDRESS << 1), I2C_Direction_Transmitter);
 	}
-	
+
 	time_cnt = 0;
 	while(!I2C_GetFlagStatus(I2C2, I2C_FLAG_TRA))
 	{
 		time_cnt++;
-//		if(time_cnt > 63000)  // 2017/09/25 by kf
-		if(time_cnt > 2)  // 2017/09/25 by kf
+		if(time_cnt > 20)
 		{
+			i2c2_fail_step = 6;
 			error_temperature = error_temperature | 0x0F;
 			return r_temperature;
 		}
 	}
-	
+
 	I2C_SendData(I2C2, 0x0);
 	time_cnt = 0;
 	while(!I2C_CheckEvent(I2C2, I2C_EVENT_MASTER_BYTE_TRANSMITTING))
 	{
 		time_cnt++;
-//		if(time_cnt > 63000)  // 2017/09/25 by kf
-		if(time_cnt > 90)  // 2017/09/25 by kf
+		if(time_cnt > 900)
 		{
+			i2c2_fail_step = 7;
 			error_temperature = error_temperature | 0x0F;
 			return r_temperature;
 		}
 	}
 	I2C_GenerateSTOP(I2C2, ENABLE);
-	
+
 	//
 	// Send cmd to receive temperature data
 	//
@@ -1157,9 +1353,9 @@ Right_temperature_IC(void)
 	while(I2C_GetFlagStatus(I2C2, I2C_FLAG_BUSY))
 	{
 		time_cnt++;
-//		if(time_cnt > 63000)  // 2017/09/25 by kf
-		if(time_cnt > 90)  // 2017/09/25 by kf
+		if(time_cnt > 900)
 		{
+			i2c2_fail_step = 8;
 			error_temperature = error_temperature | 0x0F;
 			return r_temperature;
 		}
@@ -1169,94 +1365,93 @@ Right_temperature_IC(void)
 	while(!I2C_CheckEvent(I2C2, I2C_EVENT_MASTER_MODE_SELECT))
 	{
 		time_cnt++;
-//		if(time_cnt > 63000)  // 2017/09/25 by kf
-		if(time_cnt > 10)  // 2017/09/25 by kf
+		if(time_cnt > 100)
 		{
+			i2c2_fail_step = 9;
 			error_temperature = error_temperature | 0x0F;
 			return r_temperature;
 		}
 	}
-	
-	I2C_Send7bitAddress(I2C2, (R_TMP112_ADDRESS << 1), I2C_Direction_Receiver);  // Set B0 bit of Control Byte as '0'
-	
-	time_cnt = 0;  // 2017/11/06 by kf
-	while(I2C_GetFlagStatus(I2C2, I2C_FLAG_ADDR) == RESET)  // 2017/11/06 by kf
+
+	I2C_Send7bitAddress(I2C2, (R_TMP112_ADDRESS << 1), I2C_Direction_Receiver);
+
+	time_cnt = 0;
+	while(I2C_GetFlagStatus(I2C2, I2C_FLAG_ADDR) == RESET)
 	{
-		time_cnt++;  // 2017/11/06 by kf
-		if(time_cnt > 600)  // 2017/11/06 by kf
+		time_cnt++;
+		if(time_cnt > 6000)
 		{
-			error_temperature = error_temperature | 0xF;  // 2017/11/06 by kf
-			return r_temperature;  // 2017/11/06 by kf
+			i2c2_fail_step = 10;
+			error_temperature = error_temperature | 0xF;
+			return r_temperature;
 		}
 	}
-	
-	I2C_AcknowledgeConfig(I2C2, DISABLE);  // 2017/11/06 by kf
-	I2C_NACKPositionConfig(I2C2, I2C_NACKPosition_Next);  // 2017/11/06 by kf
-	
-	(void)I2C2->SR2;  // 2017/11/06 by kf
-	
-	time_cnt = 0;  // 2017/11/06 by kf
-	while(I2C_GetFlagStatus(I2C2, I2C_FLAG_BTF) == RESET)  // 2017/11/06 by kf
+
+	I2C_AcknowledgeConfig(I2C2, DISABLE);
+	I2C_NACKPositionConfig(I2C2, I2C_NACKPosition_Next);
+
+	(void)I2C2->SR2;
+
+	time_cnt = 0;
+	while(I2C_GetFlagStatus(I2C2, I2C_FLAG_BTF) == RESET)
 	{
-		time_cnt++;  // 2017/11/06 by kf
-		if(time_cnt > 600)  // 2017/11/06 by kf
+		time_cnt++;
+		if(time_cnt > 6000)
 		{
-			error_temperature = error_temperature | 0xF;  // 2017/11/06 by kf
-			return r_temperature;  // 2017/11/06 by kf
+			i2c2_fail_step = 11;
+			error_temperature = error_temperature | 0xF;
+			return r_temperature;
 		}
 	}
 	
 	I2C_GenerateSTOP(I2C2, ENABLE);  // 2017/11/06 by kf
 	
 	time_cnt = 0;
-	while(!I2C_CheckEvent(I2C2, I2C_EVENT_MASTER_BYTE_RECEIVED))  // EV7 of transfer sequence diagram
+	while(!I2C_CheckEvent(I2C2, I2C_EVENT_MASTER_BYTE_RECEIVED))
 	{
 		time_cnt++;
-//		if(time_cnt > 63000)  // 2017/09/25 by kf
-		if(time_cnt > 160)  // 2017/09/25 by kf
+		if(time_cnt > 1600)
 		{
+			i2c2_fail_step = 12;
 			error_temperature = error_temperature | 0x0F;
 			return r_temperature;
 		}
 	}
-	
-	r_value = I2C_ReceiveData(I2C2);  // Data1 of transfer sequence diagram
-//	if(r_value & 0x0080)  // 2018/12/10 by kf
-//		r_value = r_value * (-10);  // 2018/12/10 by kf
-//	else  // 2018/12/10 by kf
-//		r_value = r_value * 10;  // 2018/12/10 by kf
-	
-	I2C_AcknowledgeConfig(I2C2, DISABLE);  // Ack = 0 in EV7_1 of transfer sequence diagram
-	I2C_GenerateSTOP(I2C2, ENABLE);  // STOP request in EV7_1 of transfer sequence diagram
+
+	r_value = I2C_ReceiveData(I2C2);
+
+	I2C_AcknowledgeConfig(I2C2, DISABLE);
+	I2C_GenerateSTOP(I2C2, ENABLE);
 
 	time_cnt = 0;
-	while(!I2C_CheckEvent(I2C2, I2C_EVENT_MASTER_BYTE_RECEIVED))  // EV7 of transfer sequence diagram
+	while(!I2C_CheckEvent(I2C2, I2C_EVENT_MASTER_BYTE_RECEIVED))
 	{
 		time_cnt++;
-//		if(time_cnt > 63000)  // 2017/09/25 by kf
-		if(time_cnt > 160)  // 2017/09/25 by kf
+		if(time_cnt > 1600)
 		{
+			i2c2_fail_step = 13;
 			error_temperature = error_temperature | 0x0F;
 			return r_temperature;
 		}
 	}
-	
-	r_fraction = I2C_ReceiveData(I2C2) >> 4;  // Data2~DataN-1 of transfer sequence diagram  // 2017/10/02 by kf
-	
+
+	r_fraction = I2C_ReceiveData(I2C2) >> 4;
+
 	time_cnt = 0;
 	while(I2C_GetFlagStatus(I2C2, I2C_FLAG_STOPF))
 	{
 		time_cnt++;
-//		if(time_cnt > 63000)  // 2017/09/25 by kf
-		if(time_cnt > 2)  // 2017/09/25 by kf
+		if(time_cnt > 20)
 		{
+			i2c2_fail_step = 14;
 			error_temperature = error_temperature | 0x0F;
 			return r_temperature;
 		}
 	}
 	I2C_AcknowledgeConfig(I2C2, ENABLE);
-	I2C_NACKPositionConfig(I2C2, I2C_NACKPosition_Current);  // 2017/11/06 by kf
-	
+	I2C_NACKPositionConfig(I2C2, I2C_NACKPosition_Current);
+	i2c2_fail_step = 0;  /* success */
+
 	if(r_value & 0x0080)  // 2018/12/10 by kf
 	{
 		/* 2's complement recover to positive representation */
@@ -1306,7 +1501,7 @@ Left_temperature_IC(void)
 	{
 		time_cnt++;
 //		if(time_cnt > 63000)  // 2017/09/25 by kf
-		if(time_cnt > 160)  // 2017/09/25 by kf
+		if(time_cnt > 1600)  // 2017/09/25 by kf
 		{
 			error_temperature = error_temperature | 0xF0;
 			return l_temperature;
@@ -1321,7 +1516,7 @@ Left_temperature_IC(void)
 	{
 		time_cnt++;
 		//		if(time_cnt > 63000)  // 2017/09/25 by kf
-		if(time_cnt > 5)  // 2017/09/25 by kf
+		if(time_cnt > 50)  // 2017/09/25 by kf
 		{
 			error_temperature = error_temperature | 0xF0;
 			return l_temperature;
@@ -1335,7 +1530,7 @@ Left_temperature_IC(void)
 	{
 		time_cnt++;
 		//		if(time_cnt > 63000)  // 2017/09/25 by kf
-		if(time_cnt > 90)  // 2017/09/25 by kf
+		if(time_cnt > 900)  // 2017/09/25 by kf
 		{
 			error_temperature = error_temperature | 0xF0;
 			return l_temperature;
@@ -1346,7 +1541,7 @@ Left_temperature_IC(void)
 			I2C_ClearFlag(I2C1, I2C_FLAG_AF);
 			time_cnt++;
 //			if(time_cnt > NACK_CHECK_MAX)  // 2017/09/25 by kf
-			if(time_cnt > 2)  // 2017/09/25 by kf
+			if(time_cnt > 20)  // 2017/09/25 by kf
 			{
 				I2C_GenerateSTOP(I2C1, ENABLE);
 				error_temperature = error_temperature | 0xF0;
@@ -1360,7 +1555,7 @@ Left_temperature_IC(void)
 			{
 				time_cnt++;
 //				if(time_cnt > 63000)  // 2017/09/25 by kf
-				if(time_cnt > 2)  // 2017/09/25 by kf
+				if(time_cnt > 20)  // 2017/09/25 by kf
 				{
 					error_temperature = error_temperature | 0xF0;
 					return l_temperature;
@@ -1375,33 +1570,33 @@ Left_temperature_IC(void)
 	{
 		time_cnt++;
 //		if(time_cnt > 63000)  // 2017/09/25 by kf
-		if(time_cnt > 2)  // 2017/09/25 by kf
+		if(time_cnt > 20)  // 2017/09/25 by kf
 		{
 			error_temperature = error_temperature | 0xF0;
 			return l_temperature;
 		}
 	}
-	
+
 	I2C_SendData(I2C1, 0x0);
 	time_cnt = 0;
 	while(!I2C_CheckEvent(I2C1, I2C_EVENT_MASTER_BYTE_TRANSMITTING))
 	{
 		time_cnt++;
 //		if(time_cnt > 63000)  // 2017/09/25 by kf
-		if(time_cnt > 90)  // 2017/09/25 by kf
+		if(time_cnt > 900)  // 2017/09/25 by kf
 		{
 			error_temperature = error_temperature | 0xF0;
 			return l_temperature;
 		}
 	}
 	I2C_GenerateSTOP(I2C1, ENABLE);
-	
+
 	time_cnt = 0;
 	while(I2C_GetFlagStatus(I2C1, I2C_FLAG_BUSY))
 	{
 		time_cnt++;
 //		if(time_cnt > 63000)  // 2017/09/25 by kf
-		if(time_cnt > 90)  // 2017/09/25 by kf
+		if(time_cnt > 900)  // 2017/09/25 by kf
 		{
 			error_temperature = error_temperature | 0xF0;
 			return l_temperature;
@@ -1416,7 +1611,7 @@ Left_temperature_IC(void)
 	{
 		time_cnt++;
 //		if(time_cnt > 63000)  // 2017/09/25 by kf
-		if(time_cnt > 10)  // 2017/09/25 by kf
+		if(time_cnt > 100)  // 2017/09/25 by kf
 		{
 			error_temperature = error_temperature | 0xF0;
 			return l_temperature;
@@ -1429,23 +1624,23 @@ Left_temperature_IC(void)
 	while(I2C_GetFlagStatus(I2C1, I2C_FLAG_ADDR) == RESET)  // 2017/11/06 by kf
 	{
 		time_cnt++;  // 2017/11/06 by kf
-		if(time_cnt > 600)  // 2017/11/06 by kf
+		if(time_cnt > 6000)  // 2017/11/06 by kf
 		{
 			error_temperature = error_temperature | 0xF0;  // 2017/11/06 by kf
 			return l_temperature;  // 2017/11/06 by kf
 		}
 	}
-	
+
 	I2C_AcknowledgeConfig(I2C1, DISABLE);  // 2017/11/06 by kf
 	I2C_NACKPositionConfig(I2C1, I2C_NACKPosition_Next);  // 2017/11/06 by kf
-	
+
 	(void)I2C1->SR2;  // 2017/11/06 by kf
-	
+
 	time_cnt = 0;  // 2017/11/06 by kf
 	while(I2C_GetFlagStatus(I2C1, I2C_FLAG_BTF) == RESET)  // 2017/11/06 by kf
 	{
 		time_cnt++;  // 2017/11/06 by kf
-		if(time_cnt > 600)  // 2017/11/06 by kf
+		if(time_cnt > 6000)  // 2017/11/06 by kf
 		{
 			error_temperature = error_temperature | 0xF0;  // 2017/11/06 by kf
 			return l_temperature;  // 2017/11/06 by kf
@@ -1459,13 +1654,13 @@ Left_temperature_IC(void)
 	{
 		time_cnt++;
 //		if(time_cnt > 63000)  // 2017/09/25 by kf
-		if(time_cnt > 160)  // 2017/09/25 by kf
+		if(time_cnt > 1600)  // 2017/09/25 by kf
 		{
 			error_temperature = error_temperature | 0xF0;
 			return l_temperature;
 		}
 	}
-	
+
 	l_value = I2C_ReceiveData(I2C1);  // Data1 of transfer sequence diagram  // SCL=CLK, SDA=DATA
 	/* 2018/12/10 by kf
 	if(l_value & 0x0080)
@@ -1482,7 +1677,7 @@ Left_temperature_IC(void)
 	{
 		time_cnt++;
 //		if(time_cnt > 63000)  // 2017/09/25 by kf
-		if(time_cnt > 160)
+		if(time_cnt > 1600)
 		{
 			error_temperature = error_temperature | 0xF0;
 			return l_temperature;
@@ -1496,7 +1691,7 @@ Left_temperature_IC(void)
 	{
 		time_cnt++;
 //		if(time_cnt > 63000)  // 2017/09/25 by kf
-		if(time_cnt > 2)  // 2017/09/25 by kf
+		if(time_cnt > 20)  // 2017/09/25 by kf
 		{
 			error_temperature = error_temperature | 0xF0;
 			return l_temperature;
@@ -1558,9 +1753,9 @@ void TempHWSave(void)
 			TimerBase1 = 0;		// clear timer
 			TpDriveOn(IcCh);
 			wait_cnt = 0;
-			for(wait = 0; wait < 2; wait++);
+			DELAY_CYCLES(2);
 			T_START_H;
-			for(wait = 0; wait < 25; wait++);  // 750ns	2012/05/14
+			DELAY_CYCLES(25);  // 750ns (match Keil)
 			break;
 		//
 		case 1:  // If complete conversion, disable start signal then obtain and translate A/D to temperature and burnout the channel double next this.
@@ -1568,10 +1763,10 @@ void TempHWSave(void)
 			if(GPIO_ReadInputDataBit(GPIOB, GPIO_Pin_14) == 0x0)
 			{
 				if((GPIO_ReadInputDataBit(GPIOA, GPIO_Pin_6) == 0x0) && (GPIO_ReadInputDataBit(GPIOC, GPIO_Pin_11) == 0x0))
-				{
+			{
 					T_START_L;
 					Read_Single_AD(0x7, ch_index);
-					TempPosAndNegFg = 0;	// Fu 105/12/02
+						TempPosAndNegFg = 0;	// Fu 105/12/02
 					calc = AD2Temp(0x0, ch_index);
 					//Nthermal_couple[0][ch_index] = ((short)(calc+l_r_temperature) > 12000) ? 12000 : (short)(calc + l_r_temperature);  // 2017/06/09 by kf
 					//	Fu 105/12/02
@@ -1797,14 +1992,14 @@ void TempHWSave(void)
 					ch_index = (ch_index + 1) % 4;
 					if(ch_index == 0)
 						IcCh = (IcCh + 1) % 3;
-					
+
 				}
 				else
 					wait_cnt++;
 			}
 			else
 				wait_cnt++;
-			
+
 			if(wait_cnt > 10)
 			{
 				TimerBase1 = 0;
@@ -1853,7 +2048,7 @@ void TempHWSave(void)
 			{
 #endif
 				l_r_temperature = Right_temperature_IC();
-				if(((unsigned short)(l_r_temperature - r_temperature) < 30) || ((unsigned short)(r_temperature - l_r_temperature) < 30))
+				if(r_temperature == 0 || ((unsigned short)(l_r_temperature - r_temperature) < 30) || ((unsigned short)(r_temperature - l_r_temperature) < 30))
 					r_temperature = l_r_temperature;
 #ifdef I2C1_MUX
 				I2C1_MUX_unlock();
@@ -1865,7 +2060,7 @@ void TempHWSave(void)
 			{
 #endif
 				l_r_temperature = Left_temperature_IC();
-				if(((unsigned short)(l_r_temperature - l_temperature) < 30) || ((unsigned short)(l_temperature - l_r_temperature) < 30))
+				if(l_temperature == 0 || ((unsigned short)(l_r_temperature - l_temperature) < 30) || ((unsigned short)(l_temperature - l_r_temperature) < 30))
 					l_temperature = l_r_temperature;
 #ifdef I2C2_MUX
 				I2C2_MUX_unlock();
@@ -1888,7 +2083,7 @@ void TempHWSave(void)
 					}
 					else
 					{
-						l_r_temperature = ((r_temperature - r_temperature) / 2);
+						l_r_temperature = ((r_temperature - l_temperature) / 2);
 						if(l_r_temperature == 0)
 						{
 							R_L_Normal_Temp_Dir_Fg = 0;	// �`�Ŭ��t�ū�
@@ -2061,7 +2256,28 @@ void TempIintData(void)
 	}
 	//  
 //	read_FRAM(0x200, pA20001, 500);  // 2018/03/22 by kf
-	eeprom_access_ret_val = read_FRAM(0x200, pA20001, 500);  // 2018/03/22 by kf
+	/*
+	 * Disable timer ISRs during EEPROM read to prevent I2C2 bus contention.
+	 * TIM4 ISR calls TempHWSave() → Right_temperature_IC() → uses I2C2.
+	 * TIM5 ISR calls RS485 parsing which may also trigger I2C operations.
+	 */
+	TIM_ITConfig(TIM2, TIM_IT_Update, DISABLE);
+	TIM_ITConfig(TIM4, TIM_IT_Update, DISABLE);
+	TIM_ITConfig(TIM5, TIM_IT_Update, DISABLE);
+	if(I2C2->SR2 & 0x0002) I2C2_BusRecovery();
+	eeprom_access_ret_val = read_FRAM(0x200, pA20001, 500);
+	if(eeprom_access_ret_val != 0) {
+		I2C2_BusRecovery();
+		eeprom_access_ret_val = read_FRAM(0x200, pA20001, 500);
+	}
+	TIM_ITConfig(TIM2, TIM_IT_Update, ENABLE);
+	TIM_ITConfig(TIM4, TIM_IT_Update, ENABLE);
+	TIM_ITConfig(TIM5, TIM_IT_Update, ENABLE);
+	dbg_puts("[EE-IN] ret="); dbg_putu(eeprom_access_ret_val);
+	dbg_puts(" CDM200="); dbg_putu(pA20001[200]);  /* PIDp offset */
+	dbg_puts(" CDM0="); dbg_putu(pA20001[0]);       /* HeatSet */
+	dbg_puts(" CDM100="); dbg_putu(pA20001[100]);   /* HeatCtrlMd */
+	dbg_puts("\r\n");
 	//
 	for(i=0; i<1000; i++)
 		*GetPtrCDM3(30001+i) = *GetPtrCDM2(20001+i);

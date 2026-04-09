@@ -28,8 +28,8 @@ extern void RS485TxSub(void);
 //extern unsigned short FirstRS485RunFg;
 extern unsigned short RsTxRxSts;
 extern unsigned short DataSet500W;
-extern unsigned short  TimerBase3;
-extern unsigned short SendRs485Fg;
+extern volatile unsigned short  TimerBase3;
+extern volatile unsigned short SendRs485Fg;
 extern unsigned short TimerBase22;
 extern unsigned short *pSplcY;
 extern unsigned short *pSplcM;
@@ -56,7 +56,7 @@ extern unsigned short *pA20001;
 
 //extern unsigned short thermal_couple[12];
 //extern unsigned short l_temperature, r_temperature;  // 2018/12/10 by kf
-extern short l_temperature, r_temperature;  // 2018/12/10 by kf
+extern volatile short l_temperature, r_temperature;  // 2018/12/10 by kf
 extern unsigned short thermal_hex[12];
 
 extern unsigned short heat;

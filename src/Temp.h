@@ -22,9 +22,9 @@ extern void read_FRAM(unsigned short addr, unsigned short *ptr_buff, unsigned sh
 //  Data
 //
 extern unsigned short TPopen;
-extern unsigned short TimerBase1;
-extern unsigned short TimerBase2;
-extern unsigned short StepCnt;
+extern volatile unsigned short TimerBase1;
+extern volatile unsigned short TimerBase2;
+extern volatile unsigned short StepCnt;
 extern unsigned short TpDownCnt[TpMaxLp];
 extern unsigned short LastOutUnit1[TpMaxLp];
 extern unsigned short LastOutUnit2[TpMaxLp];
@@ -106,7 +106,7 @@ extern unsigned short OrgTpOutPwm[12];
 extern unsigned short OrgTpOutPwmBk[12];
 extern unsigned short OrgTpOutPwmBk2[12];
 //extern unsigned short thermal_couple[12];
-extern short thermal_couple[12];
+extern volatile short thermal_couple[12];
 //
 extern struct NEW_MLAD_STS SplcSts;
 extern struct TpPID_DATA TpPIDdata[12], tempData[12];

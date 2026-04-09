@@ -10,7 +10,7 @@ unsigned short DataInitSet(unsigned short SetNumber);
 extern unsigned short R_L_Normal_Temp_Dir_Fg;	// Fu 108/12/25
 extern unsigned short R_Normal_Temp_Dir_Fg;	// Fu 108/12/25
 extern unsigned short L_Normal_Temp_Dir_Fg;	// Fu 108/12/25
-extern unsigned short thermal_PosAndNeg[3][4];  // Fu 2018/12/10 : °O¿ý¥¿­t·Å«×ª¬ºA
+extern volatile unsigned short thermal_PosAndNeg[3][4];  // Fu 2018/12/10 : ï¿½Oï¿½ï¿½ï¿½ï¿½ï¿½tï¿½Å«×ªï¿½ï¿½A
 extern unsigned long bootloader_ver;
 extern unsigned short BkPidPUnit[12];
 extern unsigned short BkPidIUnit[12];
@@ -30,7 +30,7 @@ void init(void)
 	HT_CS_H;
 	// for heat out overload detection
 	BURN_RST_L;
-	for(i = 0; i < 255; i++);				 
+	DELAY_CYCLES(255);				 
 	BURN_RST_H;
 	
 	heat = 0xff;
@@ -55,7 +55,7 @@ void init(void)
 	T_START_L;
 	T_CS13_H;
 	T_CS2_H;
-	for(i = 0; i < 50000; i++);
+	DELAY_CYCLES(50000);
 	
 	// Reset command for ADS 1248 to reset 3 devices(0000.0110)
 	{
@@ -63,52 +63,52 @@ void init(void)
 		T_CS2_L;
 		T_SCLK_H;
 		T_DIN_L;  //0
-		for(i = 0; i < 3; i++);
+		DELAY_CYCLES(3);
 		T_SCLK_L;
-		for(i = 0; i < 5; i++);
+		DELAY_CYCLES(5);
 		T_SCLK_H;
 		T_DIN_L;  //0
-		for(i = 0; i < 3; i++);
+		DELAY_CYCLES(3);
 		T_SCLK_L;
-		for(i = 0; i < 5; i++);
+		DELAY_CYCLES(5);
 		T_SCLK_H;
 		T_DIN_L;  //0
-		for(i = 0; i < 3; i++);
+		DELAY_CYCLES(3);
 		T_SCLK_L;
-		for(i = 0; i < 5; i++);
+		DELAY_CYCLES(5);
 		T_SCLK_H;
 		T_DIN_L;  //0
-		for(i = 0; i < 3; i++);
+		DELAY_CYCLES(3);
 		T_SCLK_L;
-		for(i = 0; i < 5; i++);
+		DELAY_CYCLES(5);
 		T_SCLK_H;
 		T_DIN_L;  //0
-		for(i = 0; i < 3; i++);
+		DELAY_CYCLES(3);
 		T_SCLK_L;
-		for(i = 0; i < 5; i++);
+		DELAY_CYCLES(5);
 		T_SCLK_H;
 		T_DIN_H;  //1
-		for(i = 0; i < 3; i++);
+		DELAY_CYCLES(3);
 		T_SCLK_L;
-		for(i = 0; i < 5; i++);
+		DELAY_CYCLES(5);
 		T_SCLK_H;
 		T_DIN_H;  //1
-		for(i = 0; i < 3; i++);
+		DELAY_CYCLES(3);
 		T_SCLK_L;
-		for(i = 0; i < 5; i++);
+		DELAY_CYCLES(5);
 		T_SCLK_H;
 		T_DIN_L;  //0
-		for(i = 0; i < 3; i++);
+		DELAY_CYCLES(3);
 		T_SCLK_L;
-		for(i = 0; i < 5; i++);
+		DELAY_CYCLES(5);
 		T_SCLK_L;
 		// Delay more than 1715 ns
-		for(i = 0; i < 48; i++);
+		DELAY_CYCLES(48);
 		T_CS13_H;
 		T_CS2_H;
-		for(i = 0; i < 3; i++);
+		DELAY_CYCLES(3);
 		// Wait ~0.6 ms to restart
-		for(i = 0; i < 20000; i++);
+		DELAY_CYCLES(20000);
 	}
 	
 	T_CS13_L;
@@ -146,10 +146,10 @@ void init(void)
 	T_DIN_L;
 	T_SCLK_L;
 	// Delay more than 1715 ns
-	for(i = 0; i < 40; i++);
+	DELAY_CYCLES(40);
 	T_CS13_H;
 	T_CS2_H;
-	for(i = 0; i < 3; i++);
+	DELAY_CYCLES(3);
 	
 	//
 	// Turn on VBIAS of one ADS 1248(1st) on each channels' positive input 2011/09/20
@@ -162,14 +162,14 @@ void init(void)
 	WREG(0x0, 0x1, 0x00);
 	//  set 3 ADS1248s' 01h(VBIAS)-select which pin internally connect to Vbias
 	WREG(0x0, 0x1, 0x00);  // 01010101
-	//WREG(0x0, 0x1, 0);  // 01010101	  // ¨ú®øVBISA¥\¯à
+	//WREG(0x0, 0x1, 0);  // 01010101	  // ï¿½ï¿½ï¿½ï¿½VBISAï¿½\ï¿½ï¿½
 	//
 	T_DIN_L;
 	T_SCLK_L;
 	// Delay more than 1715 ns
-	for(i = 0; i < 40; i++);
+	DELAY_CYCLES(40);
 	T_CS1_H;
-	for(i = 0; i < 3; i++);
+	DELAY_CYCLES(3);
 	
 	//
 	// Set 3 ADS 1248 data output rate with 20SPS, PGA with 32
@@ -183,10 +183,10 @@ void init(void)
 	T_SCLK_L;
 	T_DIN_L;
 	// Delay more than 1715 ns
-	for(i = 0; i < 40; i++);
+	DELAY_CYCLES(40);
 	T_CS13_H;
 	T_CS2_H;
-	for(i = 0; i < 3;i++);
+	DELAY_CYCLES(3);
 	
 	//  read j- or k-table from FRAM
 //#ifdef J_TYPE
@@ -713,7 +713,7 @@ unsigned short DataInitSet(unsigned short SetNumber)
 				*(tempData[i].VariableBaud) = 0;
 				*(tempData[i].AutoHeatBranchSwitch) = 127;
 				*(tempData[i].AutoPerHeatBranchSwitch) = 127;
-				*(tempData[i].HeatWattUnit) = 0;	// Fu 108/12/30 : ¥[¤J³Æ¥÷¨C¬q·Å«×ªº¥[¼ö¥Ë¯S¼Æ
+				*(tempData[i].HeatWattUnit) = 0;	// Fu 108/12/30 : ï¿½[ï¿½Jï¿½Æ¥ï¿½ï¿½Cï¿½qï¿½Å«×ªï¿½ï¿½[ï¿½ï¿½ï¿½Ë¯Sï¿½ï¿½
 				if(i < 7)
 				{
 					*tempData[i].HeatTm = 0;
@@ -793,7 +793,7 @@ void TpTypeMdSet(void)
 	//
 	for(i=0; i<12; i++)
 	{
-		for(j=4; j<(ch1_sec_num[i]-1); j++)			// ±Ò©l¬q = 0 «×
+		for(j=4; j<(ch1_sec_num[i]-1); j++)			// ï¿½Ò©lï¿½q = 0 ï¿½ï¿½
 		{
 			if(ch1[i][j]  == 0xffff)
 			{
@@ -809,7 +809,7 @@ void TpTypeMdSet(void)
 	}*/
 }
 //----------------------------------------------------------
-// 	2015/04/23 ÀË¬dEEPROMªì©l­È¬O§_¥¿½T
+// 	2015/04/23 ï¿½Ë¬dEEPROMï¿½ï¿½lï¿½È¬Oï¿½_ï¿½ï¿½ï¿½T
 void CheckEEPROM(unsigned short CheckNumber)
 {
 	unsigned short CheckEEPROM_i;
@@ -817,14 +817,14 @@ void CheckEEPROM(unsigned short CheckNumber)
 	switch(CheckNumber)
 	{
 		case 1:
-			for(CheckEEPROM_i = 0; CheckEEPROM_i < 499; CheckEEPROM_i++) // EEPROM ²M¬°0
+			for(CheckEEPROM_i = 0; CheckEEPROM_i < 499; CheckEEPROM_i++) // EEPROM ï¿½Mï¿½ï¿½0
 				*GetPtrCDM2(20001+CheckEEPROM_i) = 0;
 			//
-			for(CheckEEPROM_i = 0; CheckEEPROM_i < 499; CheckEEPROM_i++) // ÀË¬dEEPROM¬O§_³£¬°0
+			for(CheckEEPROM_i = 0; CheckEEPROM_i < 499; CheckEEPROM_i++) // ï¿½Ë¬dEEPROMï¿½Oï¿½_ï¿½ï¿½ï¿½ï¿½0
 			{
 				if(*GetPtrCDM2(20001+CheckEEPROM_i) != 0)
 				{
-					*GetPtrCDM2(20416) = 0xAAAA; // EEPROM¤£¬°0, «hÅã¥ÜAAAA
+					*GetPtrCDM2(20416) = 0xAAAA; // EEPROMï¿½ï¿½ï¿½ï¿½0, ï¿½hï¿½ï¿½ï¿½AAAA
 					break;
 				}
 			}

@@ -32,7 +32,7 @@ void RREG(unsigned char s, unsigned char cs, unsigned char din);
 
 //extern unsigned short thermal_couple[12];
 //extern unsigned short l_temperature, r_temperature;  // 2018/12/10 by kf
-extern short l_temperature, r_temperature;  // 2018/12/10 by kf
+extern volatile short l_temperature, r_temperature;  // 2018/12/10 by kf
 extern unsigned short thermal_hex[12];
 
 extern unsigned short heat;

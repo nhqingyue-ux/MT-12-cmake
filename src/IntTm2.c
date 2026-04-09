@@ -5,11 +5,11 @@ extern unsigned char rx_buffer[RX_BUFFER_LEN];
 extern unsigned char tx_buffer[TX_BUFFER_LEN];
 extern unsigned short crc_temp;
 extern unsigned short id;
-extern unsigned short SendRs485Fg;
+extern volatile unsigned short SendRs485Fg;
 extern unsigned short *pA20001;
-extern unsigned short TimerBase1;
-extern unsigned short TimerBase2;
-extern unsigned short  TimerBase3;
+extern volatile unsigned short TimerBase1;
+extern volatile unsigned short TimerBase2;
+extern volatile unsigned short TimerBase3;
 extern unsigned short TimerBase22;
 extern unsigned short RealTpOutPwm;
 extern unsigned char BURN_DETECT;
@@ -53,7 +53,7 @@ void ISR_Timer2(void)
 			TEMP_BASE_0p1S = 0;
 		}
 		//
-		TempHWSave();  	// µwÅé±½´y
+		TempHWSave();  	// ï¿½wï¿½é±½ï¿½y
 	}
 }
 /////////////////			    
@@ -76,6 +76,6 @@ void HT_OUT(unsigned short data)
 	GPIO_Write(GPIOE, p_e);
 	GPIO_Write(GPIOF, p_f);
 	GPIO_Write(GPIOG, p_g);
-	for(i = 0; i < 10; i++);
+	DELAY_CYCLES(10);
 	HT_CS_H;
 }

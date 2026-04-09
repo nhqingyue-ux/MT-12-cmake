@@ -24,7 +24,7 @@ write_FRAM(unsigned long addr, unsigned short *ptr_data, unsigned short cnt)
 // 	unsigned char addr_high_byte, addr_low_byte;  // 2015/03/09 by kf
 	unsigned char addr_high_byte;  // 2015/03/09 by kf
 	unsigned short i, less_than_page_size, Ack_check_count = 0;
-	unsigned char wait_cnt = 0;  // 2018/02/06 by kf
+	volatile unsigned short wait_cnt = 0;  /* volatile+short: GCC -O1 loop too fast for I2C timing */
 
 	//if((addr + cnt) > 0x0FFFF)
 	if((addr + cnt) > 0x400)
@@ -666,7 +666,7 @@ read_FRAM(unsigned long addr, unsigned short *ptr_buff, unsigned short cnt)
 		unsigned char a[2];
 		unsigned short b;
 	}c;
-	unsigned char wait_cnt = 0;  // 2018/02/06 by kf
+	volatile unsigned short wait_cnt = 0;  /* volatile+short: GCC -O1 loop too fast for I2C timing */
 	
 	//if((addr + cnt) > 0x0FFFF)
 	if((addr + cnt) > 0x400)
@@ -1203,7 +1203,7 @@ void WREG(unsigned char s, unsigned char cs, unsigned char din)
 
 	T_SCLK_L;
 	T_DIN_L;
-	
+
 	T_START_H;
 	if(cs & 0x1)
 		T_CS1_L;
@@ -1219,11 +1219,9 @@ void WREG(unsigned char s, unsigned char cs, unsigned char din)
 			T_DIN_H;
 		else
 			T_DIN_L;
-// 		for(delay = 0; delay < 3; delay++);
-		for(delay = 0; delay < 5; delay++);
+		DELAY_CYCLES(5);
 		T_SCLK_L;
-// 		for(delay = 0; delay < 2; delay++);
-		for(delay = 0; delay < 5; delay++);
+		DELAY_CYCLES(5);
 	}
 	T_START_L;
 }
@@ -1244,8 +1242,8 @@ void RREG(unsigned char s, unsigned char cs, unsigned char din)
 
 	T_SCLK_L;
 	T_DIN_L;
-	for(i = 0; i < 3; i++);
-	
+	DELAY_CYCLES(3);
+
 	T_START_H;
 	if(cs & 0x1)
 		T_CS1_L;
@@ -1265,18 +1263,18 @@ void RREG(unsigned char s, unsigned char cs, unsigned char din)
 		{
 			T_DIN_L;
 		}
-		for(i = 0; i < 10; i++);
+		DELAY_CYCLES(10);
 		T_SCLK_L;
-		for(i = 0; i < 9; i++);
+		DELAY_CYCLES(9);
 	}
 	//send number of bytes will be received(default: 0 for 1 byte(selected register))
 	for(cnt = 0; cnt < 8; cnt++)
 	{
 		T_SCLK_H;
 		T_DIN_L;
-		for(i = 0; i < 10; i++);
+		DELAY_CYCLES(10);
 		T_SCLK_L;
-		for(i = 0; i < 9; i++);
+		DELAY_CYCLES(9);
 
 	}
 	//receive 7 bits of each selected register from DO
@@ -1284,7 +1282,7 @@ void RREG(unsigned char s, unsigned char cs, unsigned char din)
 	{
 		T_SCLK_H;
 		T_DIN_H;
-		for(i = 0; i < 1; i++);
+		DELAY_CYCLES(1);
 // 		T_DO[0] = ((T_DO[0] << 1) | ((HWREG(GPIO_PORTA_BASE + (GPIO_O_DATA + (GPIO_PIN_4 << 2))))? 0x1 : 0x0));
 // 		T_DO[1] = ((T_DO[1] << 1) | ((HWREG(GPIO_PORTF_BASE + (GPIO_O_DATA + (GPIO_PIN_4 << 2))))? 0x1 : 0x0));
 // 		T_DO[2] = ((T_DO[2] << 1) | ((HWREG(GPIO_PORTF_BASE + (GPIO_O_DATA + (GPIO_PIN_5 << 2))))? 0x1 : 0x0));
@@ -1292,11 +1290,11 @@ void RREG(unsigned char s, unsigned char cs, unsigned char din)
 		T_DO[1] = ((T_DO[1] << 1) | (GPIO_ReadInputDataBit(GPIOB, GPIO_Pin_14)? 0x1 : 0x0));
 		T_DO[2] = ((T_DO[2] << 1) | (GPIO_ReadInputDataBit(GPIOC, GPIO_Pin_11)? 0x1 : 0x0));
 		T_SCLK_L;
-		for(i = 0; i < 10; i++);
+		DELAY_CYCLES(10);
 	}
 	T_SCLK_H;
 	T_DIN_H;
-	for(i = 0; i < 1; i++);
+	DELAY_CYCLES(1);
 // 	T_DO[0] = ((T_DO[0] << 1) | ((HWREG(GPIO_PORTA_BASE + (GPIO_O_DATA + (GPIO_PIN_4 << 2))))? 0x1 : 0x0));
 // 	T_DO[1] = ((T_DO[1] << 1) | ((HWREG(GPIO_PORTF_BASE + (GPIO_O_DATA + (GPIO_PIN_4 << 2))))? 0x1 : 0x0));
 // 	T_DO[2] = ((T_DO[2] << 1) | ((HWREG(GPIO_PORTF_BASE + (GPIO_O_DATA + (GPIO_PIN_5 << 2))))? 0x1 : 0x0));
@@ -1304,7 +1302,7 @@ void RREG(unsigned char s, unsigned char cs, unsigned char din)
 	T_DO[1] = ((T_DO[1] << 1) | (GPIO_ReadInputDataBit(GPIOB, GPIO_Pin_14)? 0x1 : 0x0));
 	T_DO[2] = ((T_DO[2] << 1) | (GPIO_ReadInputDataBit(GPIOC, GPIO_Pin_11)? 0x1 : 0x0));
 	T_SCLK_L;
-	for(i = 0; i < 10; i++);
+	DELAY_CYCLES(10);
 	T_START_L;
 }
 
@@ -1461,16 +1459,12 @@ HW_config(void)
 	//
 	// Set I2C2 parameters related GPIO pins and initial I2C2
 	//
-	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_10;
+	/* I2C2: PB10=SCL, PB11=SDA — both must be open-drain for I2C */
+	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_10 | GPIO_Pin_11;
 	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF;
 	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
-	GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
-	GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_UP;
-	GPIO_Init(GPIOB, &GPIO_InitStructure);
-
-	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_11;
 	GPIO_InitStructure.GPIO_OType = GPIO_OType_OD;
-	GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_NOPULL;
+	GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_UP;
 	GPIO_Init(GPIOB, &GPIO_InitStructure);
 
 	GPIO_PinAFConfig(GPIOB, GPIO_PinSource10, GPIO_AF_I2C2);  // I2C2_SCL
@@ -1484,23 +1478,19 @@ HW_config(void)
 	I2C_InitStructure.I2C_ClockSpeed = 400000;  // Fast mode
 
 	I2C_Cmd(I2C2, DISABLE);
-	for(PrescalerValue = 50; PrescalerValue > 0; PrescalerValue--);
+	DELAY_CYCLES(50);
 	I2C_Cmd(I2C2, ENABLE);
 	I2C_Init(I2C2, &I2C_InitStructure);
 	
 	//
 	// Set I2C1 parameters related GPIO pins and initial I2C1
 	//
-	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_6;
+	/* I2C1: PB6=SCL, PB7=SDA — both must be open-drain for I2C */
+	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_6 | GPIO_Pin_7;
 	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF;
 	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
-	GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
-	GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_UP;
-	GPIO_Init(GPIOB, &GPIO_InitStructure);
-
-	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_7;
 	GPIO_InitStructure.GPIO_OType = GPIO_OType_OD;
-	GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_NOPULL;
+	GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_UP;
 	GPIO_Init(GPIOB, &GPIO_InitStructure);
 
 	GPIO_PinAFConfig(GPIOB, GPIO_PinSource6, GPIO_AF_I2C1);  // I2C1_SCL
@@ -1514,7 +1504,7 @@ HW_config(void)
 	I2C_InitStructure.I2C_ClockSpeed = 400000;  // Fast mode
 
 	I2C_Cmd(I2C1, DISABLE);
-	for(PrescalerValue = 50; PrescalerValue > 0; PrescalerValue--);
+	DELAY_CYCLES(50);
 	I2C_Cmd(I2C1, ENABLE);
 	I2C_Init(I2C1, &I2C_InitStructure);
 	
@@ -1551,7 +1541,7 @@ HW_config(void)
 	// Set UART4 parameters related GPIO pins and initial UART4
 	//
 // 	USART_InitStructure.USART_BaudRate = 115200;
-	USART_InitStructure.USART_BaudRate = 460800;
+	USART_InitStructure.USART_BaudRate = 115200;
 	USART_InitStructure.USART_WordLength = USART_WordLength_8b;
 	USART_InitStructure.USART_StopBits = USART_StopBits_1;
 	USART_InitStructure.USART_Parity = USART_Parity_No;
