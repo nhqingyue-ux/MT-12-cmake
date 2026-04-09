@@ -67,10 +67,13 @@ extern struct TempSpMathTab TempUpDnSpMathTab[TpMaxLp];	// Fu 106/05/16
 extern unsigned short BkPidPUnit[TpMaxLp];
 extern unsigned short BkPidIUnit[TpMaxLp];
 extern unsigned short BkPidDUnit[TpMaxLp];
-/* A-1: Median-of-3 filter — immune to single-sample spikes */
+/* A-1: Median-of-3 + output slew limit — handles both spikes and alternating noise */
 static unsigned short med_buf[TpMaxLp][3];
 static unsigned char  med_idx = 0;
 static unsigned char  med_fill = 0;  /* counts up to 3 during init */
+#define OUTPUT_SLEW_LIMIT 20  /* 2.0°C max change per 250ms cycle */
+static unsigned short slew_out[TpMaxLp];  /* previous filtered output */
+static unsigned char  slew_out_init = 0;
 extern unsigned short TwoHeatSetTm[12];
 extern unsigned short thermal_hex[12];
 struct TempSpMathTab TempUpDnSpMathTab[TpMaxLp];	// Fu 106/05/16
@@ -143,21 +146,30 @@ void TempSubScan(void)
 						TpCurrUnit = 0;
 				}
 				/* A-1: Slew rate limit — reject single-sample spikes */
-				/* A-1: Median-of-3 filter */
+				/* A-1: Median-of-3 + output slew limit */
 				if(TpCurrUnit != 0xffff && TpCurrUnit != 12000) {
 					med_buf[i][med_idx] = TpCurrUnit;
 					if(med_fill >= 3) {
-						/* Sort 3 values, pick median */
 						unsigned short a = med_buf[i][0], b = med_buf[i][1], c = med_buf[i][2];
 						if(a > b) { unsigned short t=a; a=b; b=t; }
 						if(b > c) { unsigned short t=b; b=c; c=t; }
 						if(a > b) { unsigned short t=a; a=b; b=t; }
 						TpCurrUnit = b;  /* median */
 					}
+					/* Output slew limit: clamp rate of change to ±2°C/cycle */
+					if(slew_out_init) {
+						short delta = (short)TpCurrUnit - (short)slew_out[i];
+						if(delta > OUTPUT_SLEW_LIMIT)
+							TpCurrUnit = slew_out[i] + OUTPUT_SLEW_LIMIT;
+						else if(delta < -OUTPUT_SLEW_LIMIT)
+							TpCurrUnit = (slew_out[i] > OUTPUT_SLEW_LIMIT) ? slew_out[i] - OUTPUT_SLEW_LIMIT : 0;
+					}
+					slew_out[i] = TpCurrUnit;
 				}
 				if(i == TpMaxLp - 1) {
 					med_idx = (med_idx + 1) % 3;
 					if(med_fill < 3) med_fill++;
+					if(!slew_out_init && med_fill >= 3) slew_out_init = 1;
 				}
 				//
 				Bk_thermal_couple[i] = TpCurrUnit;
