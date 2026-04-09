@@ -43,6 +43,7 @@ extern unsigned short TemperatureOutput[12];
 unsigned short FirstRsTxRxStsOKFlag = 0;
 extern unsigned short ThermostatFun;
 extern unsigned short ADErrorFlag;
+extern volatile unsigned char adc_sampling_active;  /* B-1: freeze heater during ADC */
 unsigned short TpPwmOutputSub(unsigned short Len, unsigned short *SourPwmOutPoint, unsigned short DestPwmOutPointAddress[]);
 //void Package_extract(void); // 2012/10/11
 ////////////////////////
@@ -105,7 +106,9 @@ void ISR_Timer0(void)
 			*(tempData[0].HeatFlashBit) = RealTpOutPwm;          // 32073 (å°„å˜´åŠæ®µæ•¸show  flash) TEMP DISPLAY FLASH
 			RealTpOutPwm = TpPwmOutputSub(TpMaxLp, &RealTpOutPwm, TemperatureOutput);
 			//
-			if(!BURN_DETECT)
+			if(adc_sampling_active)
+				;  /* B-1: freeze heater output while ADC is sampling — skip HT_OUT */
+			else if(!BURN_DETECT)
 				HT_OUT(~RealTpOutPwm);  // Modify heat out
 			else
 				HT_OUT(0xFFFF);

@@ -31,6 +31,7 @@ unsigned short StartCountFlag=0u;
 unsigned char eeprom_access_ret_val = 0u;  // 2018/02/06 by kf
 unsigned short ADErrorFlag=0u;
 volatile unsigned char i2c2_fail_step = 0;  /* debug: which step of Right_temperature_IC failed */
+volatile unsigned char adc_sampling_active = 0;  /* B-1: freeze heater output during ADC sampling */
 unsigned short RelayTm[12u];
 unsigned short ThermostatTm[12u];
 unsigned short ActThermostatTm[12u];
@@ -1754,6 +1755,7 @@ void TempHWSave(void)
 			TimerBase1 = 0;		// clear timer
 			TpDriveOn(IcCh);
 			wait_cnt = 0;
+			adc_sampling_active = 1;  /* B-1: freeze heater output during ADC conversion */
 			DELAY_CYCLES(2);
 			T_START_H;
 			DELAY_CYCLES(25);  // 750ns (match Keil)
@@ -1767,6 +1769,7 @@ void TempHWSave(void)
 			{
 					T_START_L;
 					Read_Single_AD(0x7, ch_index);
+					adc_sampling_active = 0;  /* B-1: ADC read done, unfreeze heater */
 						TempPosAndNegFg = 0;	// Fu 105/12/02
 					calc = AD2Temp(0x0, ch_index);
 					//Nthermal_couple[0][ch_index] = ((short)(calc+l_r_temperature) > 12000) ? 12000 : (short)(calc + l_r_temperature);  // 2017/06/09 by kf
@@ -2003,9 +2006,10 @@ void TempHWSave(void)
 
 			if(wait_cnt > 10)
 			{
+				adc_sampling_active = 0;  /* B-1: timeout, unfreeze */
 				TimerBase1 = 0;
 				StepCnt = 2;
-				
+
 				Nthermal_couple[0][ch_index] = 12000;
 				Nthermal_couple[1][ch_index] = 12000;
 				Nthermal_couple[2][ch_index] = 12000;
