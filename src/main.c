@@ -348,7 +348,8 @@ int main(void)
 				dbg_puts(" HeatErrIR="); dbg_putu(tempData[0].HeatErrIR);
 				dbg_puts(" TpClLpFg3="); dbg_putu(TpClLpFg3);
 				dbg_puts(" ThrmFun="); dbg_putu(ThermostatFun);
-				dbg_puts("\r\n RealPwm="); dbg_putu(RealTpOutPwm);
+				dbg_puts("\r\n Flash="); dbg_putu(*(tempData[0].HeatFlashBit));
+				dbg_puts(" RealPwm="); dbg_putu(RealTpOutPwm);
 				dbg_puts(" heat="); dbg_putu(heat);
 				dbg_puts(" P0="); dbg_putu(BkPidPUnit[0]);
 				dbg_puts(" Set0="); dbg_putu(*(tempData[0].HeatSet));
