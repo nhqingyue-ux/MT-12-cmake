@@ -67,14 +67,21 @@ extern struct TempSpMathTab TempUpDnSpMathTab[TpMaxLp];	// Fu 106/05/16
 extern unsigned short BkPidPUnit[TpMaxLp];
 extern unsigned short BkPidIUnit[TpMaxLp];
 extern unsigned short BkPidDUnit[TpMaxLp];
-/* A-1: Median-of-3 + asymmetric output slew limit */
-static unsigned short med_buf[TpMaxLp][3];
+/* A-1: Median-of-9 + asymmetric slew + EMA smoothing
+ * Median-of-9 tolerates up to 4/9 (44%) bad samples per window,
+ * handles intermittent noise that median-of-5 (only 2/5 = 40%) misses */
+#define MED_WIN 9
+static unsigned short med_buf[TpMaxLp][MED_WIN];
 static unsigned char  med_idx = 0;
 static unsigned char  med_fill = 0;
-#define SLEW_RISE_LIMIT  40  /* +4.0°C/cycle: near normal heating rate, minimal lag */
-#define SLEW_FALL_LIMIT  20  /* -2.0°C/cycle: blocks noise drops (real cooling <1°C/step) */
+#define SLEW_RISE_LIMIT      60  /* +6.0°C/cycle: zero lag for any heating rate */
+#define SLEW_FALL_HEATING     2  /* -0.2°C/cycle when heating ON: max noise rejection */
+#define SLEW_FALL_COOLDOWN   30  /* -3.0°C/cycle when heating OFF: tracks real cooling */
 static unsigned short slew_out[TpMaxLp];
 static unsigned char  slew_out_init = 0;
+/* EMA smoothing: ema = (ema*7 + new*3) / 10  (alpha=0.3, ~3 sample time constant) */
+static unsigned short ema_out[TpMaxLp];
+static unsigned char  ema_init = 0;
 extern unsigned short TwoHeatSetTm[12];
 extern unsigned short thermal_hex[12];
 struct TempSpMathTab TempUpDnSpMathTab[TpMaxLp];	// Fu 106/05/16
@@ -146,31 +153,47 @@ void TempSubScan(void)
 				{
 						TpCurrUnit = 0;
 				}
-				/* A-1: Slew rate limit — reject single-sample spikes */
-				/* A-1: Median-of-3 + output slew limit */
+				/* A-1: Median-of-5 + asymmetric slew + EMA smoothing */
 				if(TpCurrUnit != 0xffff && TpCurrUnit != 12000) {
 					med_buf[i][med_idx] = TpCurrUnit;
-					if(med_fill >= 3) {
-						unsigned short a = med_buf[i][0], b = med_buf[i][1], c = med_buf[i][2];
-						if(a > b) { unsigned short t=a; a=b; b=t; }
-						if(b > c) { unsigned short t=b; b=c; c=t; }
-						if(a > b) { unsigned short t=a; a=b; b=t; }
-						TpCurrUnit = b;  /* median */
+					if(med_fill >= MED_WIN) {
+						unsigned short s[MED_WIN];
+						unsigned char k, m;
+						for(k = 0; k < MED_WIN; k++) s[k] = med_buf[i][k];
+						for(k = 1; k < MED_WIN; k++) {
+							unsigned short v = s[k];
+							for(m = k; m > 0 && s[m-1] > v; m--) s[m] = s[m-1];
+							s[m] = v;
+						}
+						TpCurrUnit = s[MED_WIN/2];
 					}
-					/* Asymmetric slew: rise +6°C (normal heating), fall -2°C (block noise) */
+					/* Asymmetric slew with adaptive fall limit:
+					 *   heating ON  → fall_limit = -0.2°C (max noise rejection)
+					 *   heating OFF → fall_limit = -3.0°C (track real cooling) */
 					if(slew_out_init) {
 						short delta = (short)TpCurrUnit - (short)slew_out[i];
+						short fall_limit = (Temp != OFF) ? SLEW_FALL_HEATING : SLEW_FALL_COOLDOWN;
 						if(delta > SLEW_RISE_LIMIT)
 							TpCurrUnit = slew_out[i] + SLEW_RISE_LIMIT;
-						else if(delta < -SLEW_FALL_LIMIT)
-							TpCurrUnit = (slew_out[i] > SLEW_FALL_LIMIT) ? slew_out[i] - SLEW_FALL_LIMIT : 0;
+						else if(delta < -fall_limit)
+							TpCurrUnit = (slew_out[i] > fall_limit) ? slew_out[i] - fall_limit : 0;
 					}
 					slew_out[i] = TpCurrUnit;
+					/* EMA smoothing: converts discrete steps to smooth ramp */
+					if(ema_init) {
+						/* ema = (ema*7 + new*3) / 10 */
+						unsigned long e = (unsigned long)ema_out[i] * 7 + (unsigned long)TpCurrUnit * 3;
+						ema_out[i] = (unsigned short)(e / 10);
+					} else {
+						ema_out[i] = TpCurrUnit;
+					}
+					TpCurrUnit = ema_out[i];
 				}
 				if(i == TpMaxLp - 1) {
-					med_idx = (med_idx + 1) % 3;
-					if(med_fill < 3) med_fill++;
-					if(!slew_out_init && med_fill >= 3) slew_out_init = 1;
+					med_idx = (med_idx + 1) % MED_WIN;
+					if(med_fill < MED_WIN) med_fill++;
+					if(!slew_out_init && med_fill >= MED_WIN) slew_out_init = 1;
+					if(!ema_init && slew_out_init) ema_init = 1;
 				}
 				//
 				Bk_thermal_couple[i] = TpCurrUnit;

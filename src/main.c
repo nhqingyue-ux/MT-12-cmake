@@ -332,32 +332,32 @@ int main(void)
 //		MainCnt = 0;	// !!!!!!!
 //		MainErrCnt = 1;
 		//
-		/* --- ADS1248 / PV debug log (every ~2000 main-loop iterations) --- */
+		/* --- Multi-channel debug log --- */
 		{
 			static unsigned int dbg_iter = 0;
-			if(++dbg_iter >= 2000) {
+			if(++dbg_iter >= 1000) {
 				dbg_iter = 0;
-				dbg_puts("[D] Amb="); dbg_puti(l_r_temperature);
-				dbg_puts(" R="); dbg_puti(r_temperature);
-				dbg_puts(" L="); dbg_puti(l_temperature);
-				dbg_puts(" i2c2f="); dbg_putu(i2c2_fail_step);
-				dbg_puts("\r\n");
-				/* Heating conditions */
-				dbg_puts("[H] HeatCtrlMd="); dbg_putu(*(tempData[0].HeatCtrlMd));
-				dbg_puts(" RsTxRxSts="); dbg_putu(RsTxRxSts);
-				dbg_puts(" ADE="); dbg_putu(ADErrorFlag);
-				dbg_puts(" HeatErrIR="); dbg_putu(tempData[0].HeatErrIR);
-				dbg_puts(" TpClLpFg3="); dbg_putu(TpClLpFg3);
-				dbg_puts(" ThrmFun="); dbg_putu(ThermostatFun);
-				dbg_puts("\r\n Flash="); dbg_putu(*(tempData[0].HeatFlashBit));
-				dbg_puts(" RealPwm="); dbg_putu(RealTpOutPwm);
-				dbg_puts(" heat="); dbg_putu(heat);
-				dbg_puts(" P0="); dbg_putu(BkPidPUnit[0]);
-				dbg_puts(" Set0="); dbg_putu(*(tempData[0].HeatSet));
-				dbg_puts(" Ctrl0="); dbg_putu(*(tempData[0].TpControl));
-				dbg_puts(" Disp0="); dbg_putu(*(tempData[0].TpDisplay));
-				dbg_puts(" DnAp="); dbg_putu(DnApSysFg);
-				dbg_puts(" 1st="); dbg_putu(FirstRsTxRxStsOKFlag);
+				unsigned char ch;
+				/* SecTempSw, TpClLpFg3, HeatFlashBit (per-channel bit fields) */
+				dbg_puts("[ST] HCM="); dbg_putu(*(tempData[0].HeatCtrlMd));
+				dbg_puts(" Fg="); dbg_putu(TpClLpFg3);
+				dbg_puts(" Flash="); dbg_putu(*(tempData[0].HeatFlashBit));
+				dbg_puts(" RPwm="); dbg_putu(RealTpOutPwm);
+				dbg_puts("\r\nPV: ");
+				for(ch = 0; ch < 12; ch++) {
+					dbg_putu(*(tempData[ch].TpDisplay));
+					dbg_putc(' ');
+				}
+				dbg_puts("\r\nST: ");  /* HeatSet per channel */
+				for(ch = 0; ch < 12; ch++) {
+					dbg_putu(*(tempData[ch].HeatSet));
+					dbg_putc(' ');
+				}
+				dbg_puts("\r\nPW: ");  /* PwmOutput per channel */
+				for(ch = 0; ch < 12; ch++) {
+					dbg_putu(*(tempData[ch].PwmOutput));
+					dbg_putc(' ');
+				}
 				dbg_puts("\r\n");
 			}
 		}
