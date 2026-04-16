@@ -168,21 +168,38 @@ void TempSubScan(void)
 						TpCurrUnit = s[MED_WIN/2];
 					}
 					/* Asymmetric slew with adaptive fall limit:
-					 *   heating ON  → fall_limit = -0.2°C (max noise rejection)
-					 *   heating OFF → fall_limit = -3.0°C (track real cooling) */
+					 *   heating ON & temp < setpoint  → -0.2°C (max noise rejection)
+					 *   heating ON & temp > setpoint  → -3.0°C (track real cooling to target)
+					 *   heating OFF                   → -3.0°C (track real cooling) */
 					if(slew_out_init) {
 						short delta = (short)TpCurrUnit - (short)slew_out[i];
-						short fall_limit = (Temp != OFF) ? SLEW_FALL_HEATING : SLEW_FALL_COOLDOWN;
+						short fall_limit;
+						if(Temp == OFF) {
+							fall_limit = SLEW_FALL_COOLDOWN;
+						} else if(thermal_couple[i] > *(tempData[i].TpControl)) {
+							/* current temp > setpoint: genuine cooling, track it */
+							fall_limit = SLEW_FALL_COOLDOWN;
+						} else {
+							fall_limit = SLEW_FALL_HEATING;
+						}
 						if(delta > SLEW_RISE_LIMIT)
 							TpCurrUnit = slew_out[i] + SLEW_RISE_LIMIT;
 						else if(delta < -fall_limit)
 							TpCurrUnit = (slew_out[i] > fall_limit) ? slew_out[i] - fall_limit : 0;
 					}
 					slew_out[i] = TpCurrUnit;
-					/* EMA smoothing: converts discrete steps to smooth ramp */
+					/* EMA smoothing: adaptive alpha
+					 *   cooling (temp > setpoint): α=0.8 (fast track, no EMI noise)
+					 *   heating (temp ≤ setpoint): α=0.3 (smooth, suppress EMI) */
 					if(ema_init) {
-						/* ema = (ema*7 + new*3) / 10 */
-						unsigned long e = (unsigned long)ema_out[i] * 7 + (unsigned long)TpCurrUnit * 3;
+						unsigned long e;
+						if(Temp != OFF && thermal_couple[i] > *(tempData[i].TpControl)) {
+							/* cooling: ema = (ema*2 + new*8) / 10 */
+							e = (unsigned long)ema_out[i] * 2 + (unsigned long)TpCurrUnit * 8;
+						} else {
+							/* heating: ema = (ema*7 + new*3) / 10 */
+							e = (unsigned long)ema_out[i] * 7 + (unsigned long)TpCurrUnit * 3;
+						}
 						ema_out[i] = (unsigned short)(e / 10);
 					} else {
 						ema_out[i] = TpCurrUnit;
