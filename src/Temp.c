@@ -155,7 +155,7 @@ void TempSubScan(void)
 				}
 				/* A-1: Adaptive anti-jitter filter
 				 *   heating (temp ≤ setpoint): Median-9 + Slew + EMA (full EMI suppression)
-				 *   cooling (temp > setpoint): Median-3 only (light protection, low lag)
+				 *   cooling (temp > setpoint): Median-5 only (noise protection, low lag)
 				 *   OFF: no filter (original Keil behavior) */
 				if(TpCurrUnit != 0xffff && TpCurrUnit != 12000) {
 					unsigned char heating = (Temp != OFF)
@@ -177,19 +177,19 @@ void TempSubScan(void)
 							}
 							TpCurrUnit = s[MED_WIN/2];
 						} else if(cooling) {
-							/* Median-3: light protection, minimal lag */
-							unsigned short s[3];
+							/* Median-5: tolerates 2/5 bad samples, low lag */
+							unsigned short s[5];
 							unsigned char k, m;
-							for(k = 0; k < 3; k++) {
+							for(k = 0; k < 5; k++) {
 								unsigned char idx = (med_idx + MED_WIN - k) % MED_WIN;
 								s[k] = med_buf[i][idx];
 							}
-							for(k = 1; k < 3; k++) {
+							for(k = 1; k < 5; k++) {
 								unsigned short v = s[k];
 								for(m = k; m > 0 && s[m-1] > v; m--) s[m] = s[m-1];
 								s[m] = v;
 							}
-							TpCurrUnit = s[1];
+							TpCurrUnit = s[2];
 						}
 					}
 					if(heating) {
