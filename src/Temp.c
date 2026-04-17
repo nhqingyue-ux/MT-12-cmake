@@ -153,67 +153,66 @@ void TempSubScan(void)
 				{
 						TpCurrUnit = 0;
 				}
-				/* A-1: Adaptive median + asymmetric slew + EMA smoothing
-				 *   heating (temp ≤ setpoint): Median-9 (max noise rejection)
-				 *   cooling (temp > setpoint): Median-3 (low lag, no EMI) */
+				/* A-1: Adaptive anti-jitter filter
+				 *   heating (temp ≤ setpoint): Median-9 + Slew + EMA (full EMI suppression)
+				 *   cooling (temp > setpoint): Median-3 only (light protection, low lag)
+				 *   OFF: no filter (original Keil behavior) */
 				if(TpCurrUnit != 0xffff && TpCurrUnit != 12000) {
+					unsigned char heating = (Temp != OFF)
+						&& (thermal_couple[i] <= *(tempData[i].TpControl));
+					unsigned char cooling = (Temp != OFF)
+						&& (thermal_couple[i] > *(tempData[i].TpControl));
+					/* Always feed median buffer */
 					med_buf[i][med_idx] = TpCurrUnit;
 					if(med_fill >= MED_WIN) {
-						unsigned char cooling = (Temp != OFF && thermal_couple[i] > *(tempData[i].TpControl));
-						unsigned char win = cooling ? 3 : MED_WIN;
-						unsigned short s[MED_WIN];
-						unsigned char k, m;
-						/* collect the most recent 'win' samples from ring buffer */
-						for(k = 0; k < win; k++) {
-							unsigned char idx = (med_idx + MED_WIN - k) % MED_WIN;
-							s[k] = med_buf[i][idx];
+						if(heating) {
+							/* Median-9: full noise rejection */
+							unsigned short s[MED_WIN];
+							unsigned char k, m;
+							for(k = 0; k < MED_WIN; k++) s[k] = med_buf[i][k];
+							for(k = 1; k < MED_WIN; k++) {
+								unsigned short v = s[k];
+								for(m = k; m > 0 && s[m-1] > v; m--) s[m] = s[m-1];
+								s[m] = v;
+							}
+							TpCurrUnit = s[MED_WIN/2];
+						} else if(cooling) {
+							/* Median-3: light protection, minimal lag */
+							unsigned short s[3];
+							unsigned char k, m;
+							for(k = 0; k < 3; k++) {
+								unsigned char idx = (med_idx + MED_WIN - k) % MED_WIN;
+								s[k] = med_buf[i][idx];
+							}
+							for(k = 1; k < 3; k++) {
+								unsigned short v = s[k];
+								for(m = k; m > 0 && s[m-1] > v; m--) s[m] = s[m-1];
+								s[m] = v;
+							}
+							TpCurrUnit = s[1];
 						}
-						/* insertion sort */
-						for(k = 1; k < win; k++) {
-							unsigned short v = s[k];
-							for(m = k; m > 0 && s[m-1] > v; m--) s[m] = s[m-1];
-							s[m] = v;
-						}
-						TpCurrUnit = s[win/2];
 					}
-					/* Asymmetric slew with adaptive fall limit:
-					 *   heating ON & temp < setpoint  → -0.2°C (max noise rejection)
-					 *   heating ON & temp > setpoint  → -3.0°C (track real cooling to target)
-					 *   heating OFF                   → -3.0°C (track real cooling) */
-					if(slew_out_init) {
-						short delta = (short)TpCurrUnit - (short)slew_out[i];
-						short fall_limit;
-						if(Temp == OFF) {
-							fall_limit = SLEW_FALL_COOLDOWN;
-						} else if(thermal_couple[i] > *(tempData[i].TpControl)) {
-							/* current temp > setpoint: genuine cooling, track it */
-							fall_limit = SLEW_FALL_COOLDOWN;
-						} else {
-							fall_limit = SLEW_FALL_HEATING;
+					if(heating) {
+						/* Slew rate limiter (heating only) */
+						if(slew_out_init) {
+							short delta = (short)TpCurrUnit - (short)slew_out[i];
+							if(delta > SLEW_RISE_LIMIT)
+								TpCurrUnit = slew_out[i] + SLEW_RISE_LIMIT;
+							else if(delta < -SLEW_FALL_HEATING)
+								TpCurrUnit = (slew_out[i] > SLEW_FALL_HEATING) ?
+									slew_out[i] - SLEW_FALL_HEATING : 0;
 						}
-						if(delta > SLEW_RISE_LIMIT)
-							TpCurrUnit = slew_out[i] + SLEW_RISE_LIMIT;
-						else if(delta < -fall_limit)
-							TpCurrUnit = (slew_out[i] > fall_limit) ? slew_out[i] - fall_limit : 0;
+						/* EMA smoothing α=0.3 (heating only) */
+						if(ema_init) {
+							unsigned long e = (unsigned long)ema_out[i] * 7
+								+ (unsigned long)TpCurrUnit * 3;
+							ema_out[i] = (unsigned short)(e / 10);
+							TpCurrUnit = ema_out[i];
+						}
 					}
+					/* Sync filter state for clean mode transitions */
 					slew_out[i] = TpCurrUnit;
-					/* EMA smoothing: adaptive alpha
-					 *   cooling (temp > setpoint): α=0.8 (fast track, no EMI noise)
-					 *   heating (temp ≤ setpoint): α=0.3 (smooth, suppress EMI) */
-					if(ema_init) {
-						unsigned long e;
-						if(Temp != OFF && thermal_couple[i] > *(tempData[i].TpControl)) {
-							/* cooling: ema = (ema*2 + new*8) / 10 */
-							e = (unsigned long)ema_out[i] * 2 + (unsigned long)TpCurrUnit * 8;
-						} else {
-							/* heating: ema = (ema*7 + new*3) / 10 */
-							e = (unsigned long)ema_out[i] * 7 + (unsigned long)TpCurrUnit * 3;
-						}
-						ema_out[i] = (unsigned short)(e / 10);
-					} else {
-						ema_out[i] = TpCurrUnit;
-					}
-					TpCurrUnit = ema_out[i];
+					ema_out[i] = TpCurrUnit;
 				}
 				if(i == TpMaxLp - 1) {
 					med_idx = (med_idx + 1) % MED_WIN;
