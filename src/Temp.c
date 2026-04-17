@@ -153,19 +153,28 @@ void TempSubScan(void)
 				{
 						TpCurrUnit = 0;
 				}
-				/* A-1: Median-of-5 + asymmetric slew + EMA smoothing */
+				/* A-1: Adaptive median + asymmetric slew + EMA smoothing
+				 *   heating (temp ≤ setpoint): Median-9 (max noise rejection)
+				 *   cooling (temp > setpoint): Median-3 (low lag, no EMI) */
 				if(TpCurrUnit != 0xffff && TpCurrUnit != 12000) {
 					med_buf[i][med_idx] = TpCurrUnit;
 					if(med_fill >= MED_WIN) {
+						unsigned char cooling = (Temp != OFF && thermal_couple[i] > *(tempData[i].TpControl));
+						unsigned char win = cooling ? 3 : MED_WIN;
 						unsigned short s[MED_WIN];
 						unsigned char k, m;
-						for(k = 0; k < MED_WIN; k++) s[k] = med_buf[i][k];
-						for(k = 1; k < MED_WIN; k++) {
+						/* collect the most recent 'win' samples from ring buffer */
+						for(k = 0; k < win; k++) {
+							unsigned char idx = (med_idx + MED_WIN - k) % MED_WIN;
+							s[k] = med_buf[i][idx];
+						}
+						/* insertion sort */
+						for(k = 1; k < win; k++) {
 							unsigned short v = s[k];
 							for(m = k; m > 0 && s[m-1] > v; m--) s[m] = s[m-1];
 							s[m] = v;
 						}
-						TpCurrUnit = s[MED_WIN/2];
+						TpCurrUnit = s[win/2];
 					}
 					/* Asymmetric slew with adaptive fall limit:
 					 *   heating ON & temp < setpoint  → -0.2°C (max noise rejection)
