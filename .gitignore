@@ -9,3 +9,6 @@ build/
 .!*!*
 # Test logs / CSV exports
 logs/
+# Doc derivatives converted from markdown (html / docx reports)
+docs/*.html
+docs/*.docx
