@@ -2292,12 +2292,13 @@ void TempIintData(void)
 	*tempData[0].AutoTingSts = 0;
 	*tempData[0].AuTnFun = 0;
 	//
-    *tempData[0].TpVersion = ('M') + ('X'<<8);
-    *tempData[1].TpVersion = ('1') + ('-'<<8);						    
-    *tempData[2].TpVersion = ('M') + ('4'<<8);
-    *tempData[3].TpVersion = ('I') + ('1'<<8);
-    *tempData[4].TpVersion = ('2') + ('0'<<8);
-    *tempData[5].TpVersion = ('4') + ('0'<<8);
+    /* Product ID "MS-TEMP02617" packed as 6 × uint16 (low byte first) */
+    *tempData[0].TpVersion = ('M') + ('S'<<8);
+    *tempData[1].TpVersion = ('-') + ('T'<<8);
+    *tempData[2].TpVersion = ('E') + ('M'<<8);
+    *tempData[3].TpVersion = ('P') + ('0'<<8);
+    *tempData[4].TpVersion = ('2') + ('6'<<8);
+    *tempData[5].TpVersion = ('1') + ('7'<<8);
 	//
 	TpTypeMdSet();
 }
