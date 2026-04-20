@@ -48,6 +48,7 @@ extern unsigned short PID2PTmI[12];
 extern unsigned short PID2PTmD[12];
 extern unsigned short PIDTpCurrBkI[12];
 extern unsigned short Bk_thermal_couple[12];
+extern unsigned short RealTpOutPwm;	/* bit-i = heater i currently driving (EMI source) */
 unsigned short PIDTpCurrBkD[12];
 unsigned short PIDTpCurrBkD2[12];
 unsigned short Output100Pr[12];
@@ -154,14 +155,23 @@ void TempSubScan(void)
 						TpCurrUnit = 0;
 				}
 				/* A-1: Adaptive anti-jitter filter
-				 *   heating (temp ≤ setpoint): Median-9 + Slew + EMA (full EMI suppression)
-				 *   cooling (temp > setpoint): Median-5 only (noise protection, low lag)
-				 *   OFF: no filter (original Keil behavior) */
+				 *   heating-mode lane (Median-9 + Slew + EMA): used when
+				 *     - this channel still below setpoint, OR
+				 *     - ANY channel is currently driving its heater (RealTpOutPwm != 0).
+				 *   cooling-mode lane (Median-5 only, low lag): used only when
+				 *     this channel is above setpoint AND no heater is firing
+				 *     anywhere (clean EMI environment).
+				 *   OFF: no filter (original Keil behavior).
+				 * Rationale: EMI from a neighbour channel's PWM couples into
+				 * this channel's ADC even when our own heater is off; in that
+				 * case Median-5 alone has been seen to oscillate at high temp. */
 				if(TpCurrUnit != 0xffff && TpCurrUnit != 12000) {
+					unsigned char any_pwm = (RealTpOutPwm != 0);
 					unsigned char heating = (Temp != OFF)
-						&& (thermal_couple[i] <= *(tempData[i].TpControl));
+						&& ((thermal_couple[i] <= *(tempData[i].TpControl)) || any_pwm);
 					unsigned char cooling = (Temp != OFF)
-						&& (thermal_couple[i] > *(tempData[i].TpControl));
+						&& (thermal_couple[i] > *(tempData[i].TpControl))
+						&& !any_pwm;
 					/* Always feed median buffer */
 					med_buf[i][med_idx] = TpCurrUnit;
 					if(med_fill >= MED_WIN) {
@@ -208,6 +218,17 @@ void TempSubScan(void)
 								+ (unsigned long)TpCurrUnit * 3;
 							ema_out[i] = (unsigned short)(e / 10);
 							TpCurrUnit = ema_out[i];
+						}
+					} else if(cooling) {
+						/* Cooling lane: one-way slew — clamp upward jumps only.
+						 * Real cooling (downward) passes through with zero added lag.
+						 * Upward spikes (EMI escaping Median-5 during brief PWM
+						 * gaps) are capped at +6°C/cycle, eliminating big up-jumps
+						 * such as the +115°C event observed in EMI-heavy tests. */
+						if(slew_out_init) {
+							short delta = (short)TpCurrUnit - (short)slew_out[i];
+							if(delta > SLEW_RISE_LIMIT)
+								TpCurrUnit = slew_out[i] + SLEW_RISE_LIMIT;
 						}
 					}
 					/* Sync filter state for clean mode transitions */

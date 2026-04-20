@@ -5,3 +5,7 @@ build/
 *.hex
 *.map
 .DS_Store
+# macOS finder lock files on smbfs
+.!*!*
+# Test logs / CSV exports
+logs/
